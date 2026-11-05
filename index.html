@@ -40,8 +40,35 @@
             position: relative;
         }
         @media (max-width: 640px) {
-            #credits-card { bottom: 124px !important; }
+            #credits-card { bottom: 168px !important; }
         }
+        /* View tools (Hide all / Pan) */
+        #view-tools { bottom: 76px; }
+        .vt-btn, .vt-chip {
+            display: inline-flex; align-items: center; gap: 4px;
+            height: 36px; padding: 0 10px; border-radius: 12px;
+            font-size: 11px; font-weight: 700; color: #334155;
+            touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+        }
+        .vt-btn .material-symbols-outlined, .vt-chip .material-symbols-outlined { font-size: 18px; }
+        .vt-btn:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+        .vt-btn.vt-on { background: #2563eb; color: #fff; border-color: #1d4ed8; }
+        .vt-run { display: none; background: #2563eb; color: #fff; box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3); }
+        .vt-chip { display: none; pointer-events: none; color: #1d4ed8; background: rgba(219, 234, 254, 0.92); border-color: #93c5fd; }
+        @media (max-width: 640px) {
+            #view-tools { bottom: 124px; }
+        }
+        /* Hide all: only the 3D model and the view tools stay */
+        body.ui-hidden header,
+        body.ui-hidden #plan-view-pane,
+        body.ui-hidden #canvas-container > div:not(#view-tools) { display: none !important; }
+        body.ui-hidden #canvas-container { width: 100% !important; height: 100% !important; flex: 1 1 100%; }
+        body.ui-hidden #view-tools {
+            bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
+            left: calc(12px + env(safe-area-inset-left, 0px));
+        }
+        body.ui-hidden .vt-run, body.ui-hidden .vt-chip { display: inline-flex; }
+        body.ui-hidden #report-banner { top: calc(12px + env(safe-area-inset-top, 0px)); }
         .font-mono-code {
             font-family: 'Roboto Mono', monospace;
         }
@@ -249,6 +276,22 @@
                         </div>
                         <span id="count-floor" class="px-1.5 py-0.5 text-[10px] font-mono-code font-bold rounded-full bg-indigo-100 text-indigo-800" title="Placed Floor Slabs">0</span>
                     </button>
+                </div>
+            </div>
+
+            <!-- View tools: Hide all / Pan / active tool (always visible, also on phones) -->
+            <div id="view-tools" class="absolute left-3 z-30 flex items-center gap-1.5">
+                <button id="btn-hide-ui" onclick="toggleHideUI()" aria-pressed="false" class="vt-btn md-btn md-card" title="Hide all panels and use the 3D view full screen (H)">
+                    <span class="material-symbols-outlined">fullscreen</span><span class="vt-label">Hide all</span>
+                </button>
+                <button id="btn-pan" onclick="togglePanMode()" aria-pressed="false" class="vt-btn md-btn md-card" title="Pan: drag to move the view up, down and sideways (P)">
+                    <span class="material-symbols-outlined">pan_tool</span><span class="vt-label">Pan</span>
+                </button>
+                <button id="btn-run-mini" onclick="runFromViewTools()" class="vt-btn vt-run md-btn" title="Run / stop the wind analysis">
+                    <span class="material-symbols-outlined">play_arrow</span>
+                </button>
+                <div id="active-tool-chip" class="vt-chip md-card" title="Tapping the model uses this tool">
+                    <span class="material-symbols-outlined">view_column</span><span class="vt-label">Column</span>
                 </div>
             </div>
 
@@ -528,6 +571,72 @@
 
         controls.addEventListener('start', () => { isDraggingCamera = true; });
         controls.addEventListener('end', () => { isDraggingCamera = false; });
+
+        /***********************************************************************
+         * VIEW TOOLS: Hide UI (full-screen 3D, last tool stays active) & Pan mode
+         ***********************************************************************/
+        let uiHidden = false;
+        let panMode = false;
+        const TOOL_LABELS = {
+            column: ['view_column', 'Column'], beam: ['horizontal_rule', 'Beam'], brace: ['texture', 'Brace'],
+            floor: ['grid_on', 'Floor Area'], connection: ['hub', 'Joint'], delete: ['delete', 'Delete']
+        };
+
+        function updateViewToolsUI() {
+            const hideBtn = document.getElementById('btn-hide-ui');
+            const panBtn = document.getElementById('btn-pan');
+            const chip = document.getElementById('active-tool-chip');
+            if (hideBtn) {
+                hideBtn.querySelector('.material-symbols-outlined').textContent = uiHidden ? 'visibility' : 'fullscreen';
+                hideBtn.querySelector('.vt-label').textContent = uiHidden ? 'Show all' : 'Hide all';
+                hideBtn.setAttribute('aria-pressed', uiHidden ? 'true' : 'false');
+            }
+            if (panBtn) {
+                panBtn.classList.toggle('vt-on', panMode);
+                panBtn.setAttribute('aria-pressed', panMode ? 'true' : 'false');
+            }
+            if (chip) {
+                const t = TOOL_LABELS[currentTool] || ['build', currentTool];
+                chip.querySelector('.material-symbols-outlined').textContent = panMode ? 'pan_tool' : t[0];
+                chip.querySelector('.vt-label').textContent = panMode ? 'Panning' : t[1];
+            }
+            const runMini = document.getElementById('btn-run-mini');
+            if (runMini) runMini.querySelector('.material-symbols-outlined').textContent = isSimulating ? 'stop' : 'play_arrow';
+        }
+
+        function toggleHideUI() {
+            uiHidden = !uiHidden;
+            document.body.classList.toggle('ui-hidden', uiHidden);
+            resizeViewports();
+            updateViewToolsUI();
+            if (!uiHidden) {
+                showStatusMessage('All panels are back.');
+            }
+        }
+
+        function togglePanMode() {
+            panMode = !panMode;
+            if (panMode) {
+                controls.touches.ONE = THREE.TOUCH.PAN;
+                controls.mouseButtons.LEFT = THREE.MOUSE.PAN;
+                controls.screenSpacePanning = true;
+                if (ghostMesh) ghostMesh.visible = false;
+                hoveredCandidate = null;
+                renderer.domElement.style.cursor = 'move';
+                showStatusMessage('Pan on: drag up, down or sideways to move the view. Pinch to zoom. Tap Pan again to build.');
+            } else {
+                controls.touches.ONE = THREE.TOUCH.ROTATE;
+                controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
+                renderer.domElement.style.cursor = 'grab';
+                showStatusMessage('Pan off: drag to rotate, tap a grid point to build.');
+            }
+            updateViewToolsUI();
+        }
+
+        function runFromViewTools() {
+            toggleSimulation();
+            updateViewToolsUI();
+        }
 
         // Ambient & Directional Studio Lighting (1024px shadow map for 4x faster shadow pass)
         const hemiLight = new THREE.HemisphereLight(0xffffff, 0xcbd5e1, 0.78);
@@ -1423,6 +1532,7 @@
                 showStatusMessage("Connection Mode: Click any cyan (Shear $5) or purple (Rigid Moment $10) joint marker to toggle it.");
             }
             updateGhostPreview();
+            if (typeof updateViewToolsUI === 'function') updateViewToolsUI();
         }
 
         function findBeamBetween(nA, nB) {
@@ -1577,16 +1687,21 @@
         }
 
         renderer.domElement.addEventListener('pointermove', (e) => {
-            if (isSimulating || isDraggingCamera) return;
+            if (isSimulating || isDraggingCamera || panMode) return;
+            if (e.pointerType && e.pointerType !== 'mouse') return; // touch has no hover; taps are handled on pointerup
 
             // Throttle raycasting to ~40Hz (every 24ms) so rapid mouse motion stays silky smooth
             const now = performance.now();
             if (now - lastRaycastTime < 24) return;
             lastRaycastTime = now;
+            updateHoverAt(e.clientX, e.clientY);
+        });
 
+        // Raycasts at a screen point and updates the hovered candidate / member / joint for the active tool
+        function updateHoverAt(clientX, clientY) {
             const rect = renderer.domElement.getBoundingClientRect();
-            pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-            pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+            pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+            pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
             raycaster.setFromCamera(pointer, camera);
 
@@ -1673,7 +1788,7 @@
                 if (ghostMesh) ghostMesh.visible = false;
                 renderer.domElement.style.cursor = 'grab';
             }
-        });
+        }
 
         renderer.domElement.addEventListener('pointerdown', (e) => {
             pointerDownPos = { x: e.clientX, y: e.clientY };
@@ -1681,7 +1796,14 @@
 
         renderer.domElement.addEventListener('pointerup', (e) => {
             const moveDist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
-            if (moveDist > 6 || isSimulating) return;
+            const isTouch = e.pointerType && e.pointerType !== 'mouse';
+            if (moveDist > (isTouch ? 12 : 6) || isSimulating) return;
+            if (panMode) {
+                showStatusMessage('Pan is on: drag to move the view. Tap Pan again to go back to building.');
+                return;
+            }
+            // Touch screens have no hover: find what is under the finger before acting on the tap
+            if (isTouch) updateHoverAt(e.clientX, e.clientY);
 
             if (e.button === 2) {
                 // Right-click quick remove
@@ -1722,6 +1844,8 @@
             if (e.key === '4') selectTool('floor');
             if (e.key === '5') selectTool('connection');
             if (e.key === '6') selectTool('delete');
+            if (e.key === 'h' || e.key === 'H') toggleHideUI();
+            if (e.key === 'p' || e.key === 'P') togglePanMode();
             if (e.key === ' ' || e.key === 'Enter') {
                 e.preventDefault();
                 toggleSimulation();
@@ -2748,6 +2872,7 @@
             runBtn.classList.replace('hover:bg-blue-700', 'hover:bg-slate-900');
             document.getElementById('run-icon').textContent = 'edit';
             document.getElementById('run-text').textContent = 'Edit Structure';
+            if (typeof updateViewToolsUI === 'function') setTimeout(updateViewToolsUI, 0);
 
             showStatusMessage("Simulating gravity dead loads and lateral wind shear forces...");
             analyzeStructuralTopology();
@@ -2805,6 +2930,7 @@
             runBtn.classList.replace('hover:bg-slate-900', 'hover:bg-blue-700');
             document.getElementById('run-icon').textContent = 'play_arrow';
             document.getElementById('run-text').textContent = 'Run Model';
+            if (typeof updateViewToolsUI === 'function') setTimeout(updateViewToolsUI, 0);
 
             document.getElementById('metric-sway').textContent = '0.0 mm';
             document.getElementById('metric-sway').className = 'font-mono-code text-sm font-semibold text-slate-700';
