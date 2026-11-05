@@ -72,7 +72,7 @@
         #mobile-bar { display: none; }
         body.mobile-mode #mobile-bar {
             display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
-            gap: 4px; justify-content: space-between;
+            gap: 3px; justify-content: space-between;
             padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
             background: rgba(255, 255, 255, 0.96); border-top: 1px solid #e2e8f0;
             box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.08);
@@ -86,10 +86,10 @@
         .mb-btn .material-symbols-outlined { font-size: 22px; }
         .mb-btn:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
         .mb-btn:active { transform: scale(0.96); }
-        .mb-ic-col { color: #2563eb; } .mb-ic-beam { color: #d97706; } .mb-ic-brace { color: #059669; } .mb-ic-floor { color: #4f46e5; } .mb-ic-joint { color: #9333ea; }
+        .mb-ic-col { color: #2563eb; } .mb-ic-beam { color: #d97706; } .mb-ic-brace { color: #059669; } .mb-ic-floor { color: #4f46e5; } .mb-ic-joint { color: #9333ea; } .mb-ic-del { color: #e11d48; }
         .mb-btn.mb-active { background: #dbeafe; border-color: #2563eb; color: #1d4ed8; box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2); }
         .mb-run { background: #2563eb; border-color: #1d4ed8; color: #fff; flex-grow: 1.2; }
-        .mb-exit { flex: 0 0 48px; color: #64748b; }
+        .mb-exit { flex: 0 0 44px; color: #64748b; }
         @media (max-width: 380px) { .mb-btn { font-size: 9.5px; } .mb-btn .material-symbols-outlined { font-size: 20px; } }
         body.mobile-mode header,
         body.mobile-mode #plan-viewonly-chip,
@@ -144,6 +144,7 @@
             }
         }
         canvas {
+            -webkit-touch-callout: none;
             display: block;
             width: 100%;
             height: 100%;
@@ -414,6 +415,7 @@
         <button class="mb-btn" data-tool="brace" onclick="selectTool('brace')"><span class="material-symbols-outlined mb-ic-brace">close</span><span>Brace</span></button>
         <button class="mb-btn" data-tool="floor" onclick="selectTool('floor')"><span class="material-symbols-outlined mb-ic-floor">grid_on</span><span>Floor</span></button>
         <button class="mb-btn" data-tool="connection" onclick="selectTool('connection')" title="Tap a joint to switch Shear / Rigid"><span class="material-symbols-outlined mb-ic-joint">hub</span><span>Joint</span></button>
+        <button class="mb-btn" data-tool="delete" onclick="selectTool('delete')" title="Tap a member to remove it (or long-press any member)"><span class="material-symbols-outlined mb-ic-del">delete</span><span>Delete</span></button>
         <button id="mb-run" class="mb-btn mb-run" onclick="runFromViewTools()"><span class="material-symbols-outlined">play_arrow</span><span class="mb-run-label">Run</span></button>
         <button class="mb-btn mb-exit" onclick="toggleMobileMode()" title="Leave mobile mode"><span class="material-symbols-outlined">close_fullscreen</span><span>Exit</span></button>
     </nav>
@@ -1828,11 +1830,51 @@
             }
         }
 
+        // Long-press (touch) deletes the member under the finger, in every mode
+        const LONG_PRESS_MS = 550;
+        const activeTouches = new Set();
+        let longPressTimer = null;
+        let longPressFired = false;
+        function cancelLongPress() {
+            if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+        }
+
         renderer.domElement.addEventListener('pointerdown', (e) => {
             pointerDownPos = { x: e.clientX, y: e.clientY };
+            longPressFired = false;
+            if (!e.pointerType || e.pointerType === 'mouse') return;
+            activeTouches.add(e.pointerId);
+            cancelLongPress();
+            if (activeTouches.size > 1 || isSimulating) return; // pinch / two-finger gestures never delete
+            const x = e.clientX, y = e.clientY;
+            longPressTimer = setTimeout(() => {
+                longPressTimer = null;
+                if (activeTouches.size !== 1 || isSimulating) return;
+                const rect = renderer.domElement.getBoundingClientRect();
+                pointer.x = ((x - rect.left) / rect.width) * 2 - 1;
+                pointer.y = -((y - rect.top) / rect.height) * 2 + 1;
+                raycaster.setFromCamera(pointer, camera);
+                const hits = raycaster.intersectObjects(memberRaycastTargets, false);
+                if (hits.length > 0 && hits[0].object.userData.member) {
+                    longPressFired = true;
+                    try { if (navigator.vibrate) navigator.vibrate(30); } catch (err) { /* no vibration */ }
+                    removeMember(hits[0].object.userData.member);
+                }
+            }, LONG_PRESS_MS);
         });
 
+        renderer.domElement.addEventListener('pointermove', (e) => {
+            if (!longPressTimer) return;
+            if (Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y) > 12) cancelLongPress();
+        });
+
+        const endTouch = (e) => { activeTouches.delete(e.pointerId); cancelLongPress(); };
+        renderer.domElement.addEventListener('pointercancel', endTouch);
+        renderer.domElement.addEventListener('pointerleave', endTouch);
+
         renderer.domElement.addEventListener('pointerup', (e) => {
+            if (e.pointerType && e.pointerType !== 'mouse') endTouch(e);
+            if (longPressFired) { longPressFired = false; return; } // the long-press already deleted
             const moveDist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
             const isTouch = e.pointerType && e.pointerType !== 'mouse';
             if (moveDist > (isTouch ? 12 : 6) || isSimulating) return;
