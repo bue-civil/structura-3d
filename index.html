@@ -71,6 +71,15 @@
         /* Mobile mode: member buttons + Run (bottom bar), 2D plan with level buttons, 3D view */
         #mobile-bar { display: none; }
         #mobile-watermark { display: none; }
+        #mobile-quake-toggle { display: none; }
+        body.mobile-mode #mobile-quake-toggle {
+            display: inline-flex; align-items: center; gap: 4px; height: 36px; padding: 0 10px; border-radius: 12px;
+            font-size: 11px; color: #9a3412; border-color: #fdba74; background: rgba(255, 247, 237, 0.95);
+            touch-action: manipulation;
+        }
+        body.mobile-mode #mobile-quake-toggle .material-symbols-outlined { font-size: 18px; color: #ea580c; }
+        body.mobile-mode #mobile-quake-toggle.mq-severe { color: #fff; background: #dc2626; border-color: #b91c1c; }
+        body.mobile-mode #mobile-quake-toggle.mq-severe .material-symbols-outlined { color: #fff; }
         body.mobile-mode #mobile-watermark {
             display: block; position: absolute; z-index: 5; pointer-events: none; user-select: none;
             right: max(12px, env(safe-area-inset-right, 0px)); bottom: 12px;
@@ -223,6 +232,10 @@
                     <button id="plan-btn-4" onclick="selectPlanLevel(4)" class="md-btn px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-transparent">4th</button>
                 </div>
 
+                <button id="mobile-quake-toggle" onclick="toggleQuakeLevel()" class="md-btn md-card pointer-events-auto" title="Earthquake strength">
+                    <span class="material-symbols-outlined">vibration</span>
+                    <span>Quake: <strong id="mobile-quake-label">Mild</strong></span>
+                </button>
                 <div id="plan-viewonly-chip" class="md-card pointer-events-auto rounded-xl px-2.5 py-1.5 flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
                     <span class="material-symbols-outlined text-sm text-slate-400">visibility</span>
                     <span>2D Plan (View Only)</span>
@@ -239,7 +252,7 @@
                     <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-cyan-600 inline-block"></span> Shear / Gusset ($5)</span>
                     <span class="flex items-center gap-1"><span class="w-2 h-2 bg-purple-600 inline-block"></span> Rigid ($10)</span>
                     <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full border-2 border-emerald-600 inline-block"></span> CR</span>
-                    <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-sky-500 inline-block"></span> Wind resultant</span>
+                    <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-sky-500 inline-block"></span> Wind / <span class="w-3 h-0.5 bg-orange-600 inline-block"></span> quake force</span>
                 </div>
             </div>
         </div>
@@ -484,11 +497,15 @@
             </div>
 
             <!-- Lateral Wind Toggle -->
-            <button id="btn-wind" onclick="toggleWindIntensity()" class="md-btn rounded-xl px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center gap-1.5 text-xs font-medium border border-slate-200" title="Cycle Lateral Wind Load">
-                <span class="material-symbols-outlined text-base text-sky-600">air</span>
-                <span>Wind: <strong id="wind-label">Storm 150 km/h</strong></span>
+            <button id="btn-hazard" onclick="toggleHazard()" class="md-btn rounded-xl px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center gap-1.5 text-xs font-medium border border-slate-200" title="Switch the load case: wind or earthquake">
+                <span id="hazard-icon" class="material-symbols-outlined text-base text-orange-600">storm</span>
+                <span>Load: <strong id="hazard-label">Wind</strong></span>
             </button>
-            <button id="btn-wind-dir" onclick="toggleWindDirection()" class="md-btn rounded-xl px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center gap-1.5 text-xs font-medium border border-slate-200" title="Switch wind direction (along X or along Z)">
+            <button id="btn-wind" onclick="toggleWindIntensity()" class="md-btn rounded-xl px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center gap-1.5 text-xs font-medium border border-slate-200" title="Cycle the wind speed or earthquake level">
+                <span id="wind-icon" class="material-symbols-outlined text-base text-sky-600">air</span>
+                <span><span id="wind-prefix">Wind:</span> <strong id="wind-label">Storm 150 km/h</strong></span>
+            </button>
+            <button id="btn-wind-dir" onclick="toggleWindDirection()" class="md-btn rounded-xl px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center gap-1.5 text-xs font-medium border border-slate-200" title="Switch the wind / shaking direction (along X or along Z)">
                 <span id="wind-dir-icon" class="material-symbols-outlined text-base text-sky-600">east</span>
                 <span>Dir: <strong id="wind-dir-label">+X</strong></span>
             </button>
@@ -678,6 +695,7 @@
                 document.body.classList.remove('ui-hidden');
             }
             document.body.classList.toggle('mobile-mode', mobileMode);
+            if (mobileMode) setHazard('seismic', true); // earthquakes are the default test on phones
             resizeViewports();
             updateViewToolsUI();
         }
@@ -2343,6 +2361,54 @@
 
             // 3. Solve K u = F
             choleskyInPlace(K, n);
+
+            // 3b. Earthquake: equivalent lateral force method. Pattern P_i = W_i * h_i (inverted triangle)
+            //     along D; fundamental period T by Rayleigh's method on that pattern; base shear
+            //     V = Sa(T) / q * W with a simple design spectrum (plateau 2.5 PGA up to Tc, then ~1/T).
+            let seismicInfo = null;
+            if (opts.seismic) {
+                const sq = opts.seismic;
+                const P = new Float64Array(n);
+                const pat = new Map();
+                let sumP = 0, W = 0;
+                active.forEach((nd, key) => {
+                    if (nd.gy === 0) return;
+                    const w = gravity.get(key);
+                    W += w;
+                    const pi = w * nd.restPos.y;
+                    if (pi <= 0) return;
+                    const d = dofMap.get(key);
+                    P[d[0]] += D[0] * pi;
+                    P[d[2]] += D[2] * pi;
+                    pat.set(key, pi);
+                    sumP += pi;
+                });
+                if (sumP > 0) {
+                    const Up = choleskySolve(K, n, P);
+                    let num = 0, den = 0;
+                    pat.forEach((pi, key) => {
+                        const d = dofMap.get(key);
+                        const u = Up[d[0]] * D[0] + Up[d[2]] * D[2];
+                        num += (gravity.get(key) / 9.81) * u * u;
+                        den += pi * u;
+                    });
+                    let T = den > 1e-12 ? 2 * Math.PI * Math.sqrt(num / den) : 4;
+                    T = Math.min(4, Math.max(0.05, T));
+                    const Sa = sq.pga * 2.5 * (T <= sq.Tc ? 1 : Math.max(0.2, sq.Tc / T));
+                    const V = Sa / sq.q * W;
+                    const scale = V / sumP;
+                    pat.forEach((pi, key) => {
+                        const d = dofMap.get(key);
+                        const f = pi * scale;
+                        F[d[0]] += D[0] * f;
+                        F[d[2]] += D[2] * f;
+                        windLoads.set(key, f); // applied lateral forces (used for the resultant on the plan)
+                        lateralLoad.set(key, (lateralLoad.get(key) || 0) + f);
+                    });
+                    seismicInfo = { T, Sa, V, W, q: sq.q, pga: sq.pga };
+                }
+            }
+
             const U = choleskySolve(K, n, F);
 
             const disp = new Map();
@@ -2517,7 +2583,7 @@
                 if (sF > 0) st.cp = { x: sx / sF, z: sz / sF, F: sF };
             }
 
-            return { disp, results, storeys, isMechanism, unstableNodes, maxTrans, windLoads, gravity, dof: n, windDir, D };
+            return { disp, results, storeys, isMechanism, unstableNodes, maxTrans, windLoads, gravity, dof: n, windDir, D, seismic: seismicInfo };
         }
 
         /***********************************************************************
@@ -2538,7 +2604,26 @@
             { label: 'Storm', kmh: 150, p: 1.4 },
             { label: 'Hurricane', kmh: 250, p: 3.9 }
         ];
-        const DRIFT_SERVICE = 1 / 400;   // storey drift limit for comfort / cladding (H/400)
+        // Earthquake levels: peak ground acceleration (PGA, in g). Elastic response (no ductility credit).
+        let hazard = 'wind'; // 'wind' | 'seismic'
+        let quakeLevel = 0;
+        const QUAKE_LEVELS = [
+            { label: 'Mild', pga: 0.10, shake: 0.12 },
+            { label: 'Severe', pga: 0.35, shake: 0.30 }
+        ];
+        const SEISMIC = { q: 1.0, Tc: 0.6 };
+        const DRIFT_SERVICE_WIND = 1 / 400;   // storey drift limit for comfort / cladding (H/400)
+        const DRIFT_SERVICE_QUAKE = 1 / 200;  // 0.5 % storey drift: non-structural damage starts
+        let DRIFT_SERVICE = DRIFT_SERVICE_WIND;
+        let simRunId = 0;
+
+        function isSeismic() { return hazard === 'seismic'; }
+        function lateralActive() { return isSeismic() || windLevel > 0; }
+        function quakeText() {
+            const q = QUAKE_LEVELS[quakeLevel];
+            return `${q.label} earthquake (PGA ${q.pga.toFixed(2)} g)`;
+        }
+        function loadText() { return isSeismic() ? quakeText() : `${windText()} wind`; }
         const DRIFT_COLLAPSE = 1 / 50;   // beyond this the frame is treated as unstable
         const TORSION_LIMIT = 1.2;       // ASCE 7 torsional irregularity: max drift > 1.2 x average
         const PDELTA_COLLAPSE = 0.5;     // P-Delta stability coefficient limit
@@ -2556,7 +2641,19 @@
 
         function updateWindLabels() {
             const lbl = document.getElementById('wind-label');
-            if (lbl) lbl.textContent = windText();
+            if (lbl) lbl.textContent = isSeismic() ? QUAKE_LEVELS[quakeLevel].label : windText();
+            const lp = document.getElementById('wind-prefix');
+            if (lp) lp.textContent = isSeismic() ? 'Quake:' : 'Wind:';
+            const li = document.getElementById('wind-icon');
+            if (li) li.textContent = isSeismic() ? 'vibration' : 'air';
+            const hz = document.getElementById('hazard-label');
+            if (hz) hz.textContent = isSeismic() ? 'Earthquake' : 'Wind';
+            const hzi = document.getElementById('hazard-icon');
+            if (hzi) hzi.textContent = isSeismic() ? 'landslide' : 'storm';
+            const mq = document.getElementById('mobile-quake-label');
+            if (mq) mq.textContent = QUAKE_LEVELS[quakeLevel].label;
+            const mqb = document.getElementById('mobile-quake-toggle');
+            if (mqb) mqb.classList.toggle('mq-severe', quakeLevel === 1);
             const dl = document.getElementById('wind-dir-label');
             const di = document.getElementById('wind-dir-icon');
             if (dl) dl.textContent = windDir === 'x' ? '+X' : '+Z';
@@ -2571,31 +2668,55 @@
             }
             maxObservedSwayMm = 0;
             maxObservedStressPct = 0;
+            simStartTime = performance.now() * 0.001; // restart the shaking record
+            simRunId++;
             analyzeStructuralTopology();
             buildWindArrowsVisual();
         }
 
         function toggleWindIntensity() {
+            if (isSeismic()) { toggleQuakeLevel(); return; }
             windLevel = (windLevel + 1) % WIND_LEVELS.length;
             updateWindLabels();
             if (isSimulating) rerunAnalysis();
             else showStatusMessage(`Wind set to ${windText()} (${WIND_LEVELS[windLevel].p.toFixed(1)} kPa on the facade).`);
         }
 
+        function toggleQuakeLevel() {
+            quakeLevel = (quakeLevel + 1) % QUAKE_LEVELS.length;
+            updateWindLabels();
+            if (isSimulating && isSeismic()) rerunAnalysis();
+            else showStatusMessage(`Earthquake set to ${quakeText()}.`);
+        }
+
+        function setHazard(h, silent = false) {
+            if (hazard === h) { updateWindLabels(); return; }
+            hazard = h;
+            updateWindLabels();
+            if (isSimulating) rerunAnalysis();
+            else if (!silent) showStatusMessage(isSeismic()
+                ? `Load case: earthquake. ${quakeText()} shaking along ${windDir === 'x' ? 'X' : 'Z'}.`
+                : `Load case: wind. ${windText()} blowing along ${windDir === 'x' ? '+X' : '+Z'}.`);
+        }
+
+        function toggleHazard() { setHazard(isSeismic() ? 'wind' : 'seismic'); }
+
         function toggleWindDirection() {
             windDir = windDir === 'x' ? 'z' : 'x';
             updateWindLabels();
             if (isSimulating) rerunAnalysis();
-            else showStatusMessage(windDir === 'x'
-                ? 'Wind now blows along +X (hits grid line A first).'
-                : 'Wind now blows along +Z (hits grid line 1 first).');
+            else showStatusMessage(isSeismic()
+                ? `The ground now shakes along ${windDir === 'x' ? 'X' : 'Z'}.`
+                : (windDir === 'x'
+                    ? 'Wind now blows along +X (hits grid line A first).'
+                    : 'Wind now blows along +Z (hits grid line 1 first).'));
         }
 
         function buildWindArrowsVisual() {
             while (windArrowsGroup.children.length) {
                 windArrowsGroup.remove(windArrowsGroup.children[0]);
             }
-            if (!isSimulating || windLevel === 0 || !analysisResult) return;
+            if (!isSimulating || isSeismic() || windLevel === 0 || !analysisResult) return;
 
             const dir = windDir === 'x' ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1);
             let fMax = 0;
@@ -2666,8 +2787,9 @@
                 members,
                 bay: BAY_WIDTH,
                 storyHeight: STORY_HEIGHT,
-                windPressure: WIND_LEVELS[windLevel].p,
+                windPressure: isSeismic() ? 0 : WIND_LEVELS[windLevel].p,
                 windDir,
+                seismic: isSeismic() ? { pga: QUAKE_LEVELS[quakeLevel].pga, q: SEISMIC.q, Tc: SEISMIC.Tc } : null,
                 isRigidEnd: (beam, node) => {
                     const c = connectionsMap.get(`${beam.id}:${node.key}`);
                     return c ? c.type === 'moment' : true; // no column there -> beams spliced continuously
@@ -2675,6 +2797,14 @@
                 slabSupports: floor => checkParallelBeamsForFloor(floor).supportingBeams
             });
             analysisResult = res;
+            DRIFT_SERVICE = isSeismic() ? DRIFT_SERVICE_QUAKE : DRIFT_SERVICE_WIND;
+            // Seismic drifts = elastic analysis drift x q (equal displacement rule)
+            if (res.seismic && SEISMIC.q !== 1) {
+                for (const st of res.storeys) {
+                    st.maxDriftRatio *= SEISMIC.q;
+                    st.thetaPD *= SEISMIC.q;
+                }
+            }
 
             const storeyMap = new Map(res.storeys.map(st => [st.level, st]));
             const failed = new Set();
@@ -2719,7 +2849,7 @@
                 if (st.thetaPD > maxTheta) maxTheta = st.thetaPD;
                 const significant = st.drifts.length >= 2 &&
                     Math.max(...st.drifts.map(d => Math.abs(d.along))) > 1e-5;
-                if (windLevel > 0 && significant && st.torsionRatio > worstTors) {
+                if (lateralActive() && significant && st.torsionRatio > worstTors) {
                     worstTors = st.torsionRatio;
                     torsStorey = st;
                 }
@@ -2820,7 +2950,9 @@
 
             // 7. Verdict & explanation banner
             const fmtH = r => r > 1e-9 ? `H/${Math.round(1 / r)}` : 'H/∞';
-            const wind = windText();
+            const loadName = loadText();
+            const quake = isSeismic();
+            const resultantName = quake ? 'earthquake force, which acts at the centre of mass' : 'wind resultant';
             let state, title, desc;
 
             if (failMode) {
@@ -2834,13 +2966,16 @@
                     desc = 'Some joints have no stiffness: a rectangle of pinned joints folds like a parallelogram (and with pinned base plates nothing stops it). Add diagonal Bracing, Rigid moment joints, or Floor Area slabs that tie unbraced frames to braced ones.';
                 } else if (failMode === 'overstress') {
                     const wm = worstMember || Array.from(failed)[0];
-                    const where = wm && wm.n1 ? `${wm.type} at ${gridLabel(wm.n1)}${wm.n2 ? '–' + gridLabel(wm.n2) : ''}, level ${Math.max(wm.n1.gy, wm.n2.gy)}` : 'a member';
+                    const where = !(wm && wm.n1) ? 'a member'
+                        : wm.type === 'column'
+                            ? `column at ${gridLabel(wm.n1)}, storey ${Math.max(wm.n1.gy, wm.n2.gy)}`
+                            : `${wm.type} at ${gridLabel(wm.n1)}–${gridLabel(wm.n2)}, level ${Math.max(wm.n1.gy, wm.n2.gy)}`;
                     title = 'Collapse — steel member yielded!';
-                    desc = `The ${where} reached ${Math.round((wm && wm.util || 1) * 100)}% of its capacity under ${wind} wind. Add bracing to share the load, or reduce the height.`;
+                    desc = `The ${where} reached ${Math.round((wm && wm.util || 1) * 100)}% of its capacity in the ${loadName.replace(' wind', '')}${quake ? '' : ' wind'}. Add bracing to share the load, or reduce the height.`;
                 } else {
                     const st = maxDriftStorey;
                     title = 'Collapse — excessive sway (P-Δ instability)!';
-                    desc = `Storey ${st ? st.level : ''} drifted ${fmtH(maxDrift)}. The gravity load on the leaning columns pushed it further until it became unstable. Moment frames bend a lot — add diagonal bracing to stiffen.`;
+                    desc = `Storey ${st ? st.level : ''} drifted ${fmtH(maxDrift)}${quake ? ' while the ground shook' : ''}. The gravity load on the leaning columns pushed it further until it became unstable. Moment frames bend a lot — add diagonal bracing to stiffen.`;
                 }
                 playSound('collapse');
             } else {
@@ -2853,12 +2988,12 @@
                     let ecc = '';
                     if (st.cr && st.cp) {
                         const e = windDir === 'x' ? Math.abs(st.cp.z - st.cr.z) : Math.abs(st.cp.x - st.cr.x);
-                        ecc = ` The centre of rigidity (CR) sits ${e.toFixed(1)} m away from the wind resultant, so the floor rotates ${thetaDeg.toFixed(3)}°.`;
+                        ecc = ` The centre of rigidity (CR) sits ${e.toFixed(1)} m away from the ${resultantName}, so the floor rotates ${thetaDeg.toFixed(3)}°.`;
                     }
                     parts.push(`Storey ${st.level}: the worst column drifts ${worstTors.toFixed(2)}× the average.${ecc} Balance the bracing on opposite sides of the building.`);
                 }
                 if (swaying) {
-                    parts.push(`Max storey drift ${fmtH(maxDrift)} exceeds H/400. Moment frames resist sway by bending, so they are much more flexible than braced frames.`);
+                    parts.push(`Max storey drift ${fmtH(maxDrift)} exceeds H/${Math.round(1 / DRIFT_SERVICE)}${quake ? ': walls, windows and ceilings would be damaged' : ''}. Moment frames resist sway by bending, so they are much more flexible than braced frames.`);
                 }
                 if (torsional) {
                     structureOutcome = 'torsion';
@@ -2875,15 +3010,24 @@
                 } else {
                     structureOutcome = 'stable';
                     state = 'stable';
-                    title = 'Model Verified: Structure Stable';
-                    desc = `Under ${wind} wind: max drift ${fmtH(maxDrift)}, peak utilisation ${maxObservedStressPct}%` +
-                        (worstTors > 1.0 && windLevel > 0 ? `, torsion ratio ${worstTors.toFixed(2)}×.` : '.') +
-                        ' Loads flow safely to the foundations.';
+                    title = quake ? 'Survived the earthquake!' : 'Model Verified: Structure Stable';
+                    const sInfo = res.seismic ? ` Natural period T = ${res.seismic.T.toFixed(2)} s, base shear ${res.seismic.V.toFixed(0)} kN (${Math.round(res.seismic.V / res.seismic.W * 100)}% of the building weight).` : '';
+                    desc = `${quake ? 'In the' : 'Under'} ${loadName}: max drift ${fmtH(maxDrift)}, peak utilisation ${maxObservedStressPct}%` +
+                        (worstTors > 1.0 && lateralActive() ? `, torsion ratio ${worstTors.toFixed(2)}×.` : '.') +
+                        (quake ? sInfo : ' Loads flow safely to the foundations.');
                     playSound('stable');
                 }
             }
-            showReportBanner(state, title, desc);
-            showStatusMessage(`Analysed ${members.length} members (${res.dof} DOF) for gravity + ${wind} wind along ${windDir === 'x' ? '+X' : '+Z'}.`);
+            if (quake) {
+                // Let the ground shake first; the verdict appears once the strong shaking has arrived
+                const runId = simRunId;
+                setTimeout(() => {
+                    if (isSimulating && runId === simRunId) showReportBanner(state, title, desc);
+                }, SHAKE_FAIL_DELAY * 1000);
+            } else {
+                showReportBanner(state, title, desc);
+            }
+            showStatusMessage(`Analysed ${members.length} members (${res.dof} DOF) for gravity + ${loadName} along ${windDir === 'x' ? 'X' : 'Z'}.`);
         }
 
         function updateTelemetry(driftRatio, torsRatio) {
@@ -2900,7 +3044,7 @@
                 maxObservedStressPct >= 90 ? 'text-rose-600' : (maxObservedStressPct >= 55 ? 'text-amber-600' : 'text-emerald-600')
             }`;
             if (torsEl) {
-                const show = windLevel > 0 && torsRatio > 1.0001;
+                const show = lateralActive() && torsRatio > 1.0001;
                 torsEl.textContent = show ? `${torsRatio.toFixed(2)}×` : '—';
                 torsEl.className = `font-mono-code text-sm font-semibold ${
                     !show ? 'text-slate-700' : (torsRatio > 1.4 ? 'text-rose-600' : (torsRatio > TORSION_LIMIT ? 'text-amber-600' : 'text-emerald-600'))
@@ -2931,15 +3075,47 @@
             return c;
         }
 
+        const SHAKE_FAIL_DELAY = 2.2;   // s of shaking before damaged members give way
+        const SHAKE_CYCLE = 10;         // s: one synthetic earthquake record, then it repeats
+        const _shakeOffset = new THREE.Vector3();
+
+        // Synthetic earthquake: build-up, strong shaking, decay, quiet
+        function shakeEnvelope(t) {
+            if (t < 1.2) return t / 1.2;
+            if (t < 6.0) return 1;
+            if (t < 9.0) return (9.0 - t) / 3.0;
+            return 0;
+        }
+
         function stepPhysicsSimulation(dt, elapsed) {
-            // Gusty wind: the computed static shape breathes around its mean
-            const gust = windLevel > 0
-                ? 1 + 0.10 * Math.sin(elapsed * 2.4) + 0.04 * Math.sin(elapsed * 6.3 + 1.1)
-                : 1;
+            const quake = isSeismic() && analysisResult && analysisResult.seismic;
+            let gust = 1;
+            let groundShift = 0;
+            if (quake) {
+                const t = elapsed % SHAKE_CYCLE;
+                const env = shakeEnvelope(t);
+                const Tshow = Math.min(2.0, Math.max(0.35, analysisResult.seismic.T));
+                const A = QUAKE_LEVELS[quakeLevel].shake;
+                groundShift = A * env * (0.65 * Math.sin(2 * Math.PI * 1.1 * t) + 0.35 * Math.sin(2 * Math.PI * 2.3 * t + 0.7));
+                gust = env * Math.sin(2 * Math.PI * t / Tshow); // structural response, peaks at the design shape
+            } else if (windLevel > 0) {
+                // Gusty wind: the computed static shape breathes around its mean
+                gust = 1 + 0.10 * Math.sin(elapsed * 2.4) + 0.04 * Math.sin(elapsed * 6.3 + 1.1);
+            }
+            const collapseNow = !quake || elapsed > SHAKE_FAIL_DELAY;
+            const D = windDir === 'x' ? [1, 0] : [0, 1];
+            _shakeOffset.set(D[0] * groundShift, 0, D[1] * groundShift);
+            environmentGroup.position.copy(_shakeOffset);
+            footingsGroup.position.copy(_shakeOffset);
 
             nodesMap.forEach(node => {
-                if (node.gy === 0) return;
-                if (node.falling) {
+                if (node.gy === 0) {
+                    if (quake) node.simPos.copy(node.restPos).add(_shakeOffset);
+                    return;
+                }
+                if (node.falling && !collapseNow) {
+                    node.simPos.copy(node.restPos).add(_shakeOffset);
+                } else if (node.falling) {
                     node.vel.y -= 18.0 * dt;
                     node.simPos.addScaledVector(node.vel, dt);
                     if (node.simPos.y < 0.15) {
@@ -2948,19 +3124,27 @@
                     }
                 } else if (node.dispVec) {
                     node.simPos.copy(node.restPos).addScaledVector(node.dispVec, deformScale * gust);
+                    if (quake) node.simPos.add(_shakeOffset);
                 }
             });
 
             for (const m of members) {
-                const liveStress = m.failed ? 1 : Math.min(1.0, m.stress * (1 + (gust - 1) * 0.8));
+                const liveStress = m.failed ? 1 : Math.min(1.0, quake
+                    ? m.stress * (0.25 + 0.75 * Math.abs(gust))
+                    : m.stress * (1 + (gust - 1) * 0.8));
                 const mat = m.mesh.userData.primaryMaterial;
                 mat.color.copy(getStressColor(liveStress));
 
-                if (m.failed) {
+                if (m.failed && !collapseNow) {
+                    // Damaged but still standing until the strong shaking arrives
+                    if (m.type === 'floor') alignFloorMesh(m.mesh, m.corners, true);
+                    else alignMemberMesh(m, true);
+                } else if (m.failed) {
                     // Dynamic plastic buckling / collapse trajectory
                     m.collapseVel.y -= 16.5 * dt;
-                    m.collapseVel.x += (windDir === 'x' ? 1 : 0) * windLevel * 1.0 * dt;
-                    m.collapseVel.z += (windDir === 'z' ? 1 : 0) * windLevel * 1.0 * dt;
+                    const push = quake ? 2 + 2 * quakeLevel : windLevel;
+                    m.collapseVel.x += (windDir === 'x' ? 1 : 0) * push * 1.0 * dt;
+                    m.collapseVel.z += (windDir === 'z' ? 1 : 0) * push * 1.0 * dt;
                     m.mesh.position.addScaledVector(m.collapseVel, dt);
                     m.mesh.rotation.x += m.collapseRotVel.x * dt;
                     m.mesh.rotation.z += m.collapseRotVel.z * dt;
@@ -2981,7 +3165,7 @@
 
             // Beam-column joints & brace gussets follow their members
             connectionsMap.forEach(conn => {
-                if (conn.beam.failed) {
+                if (conn.beam.failed && collapseNow) {
                     conn.mesh.visible = false;
                 } else {
                     conn.mesh.visible = true;
@@ -2989,7 +3173,7 @@
                 }
             });
             braceConnectionsMap.forEach(g => {
-                if (g.brace.failed) {
+                if (g.brace.failed && collapseNow) {
                     g.mesh.visible = false;
                 } else {
                     g.mesh.visible = true;
@@ -3019,6 +3203,7 @@
             }
 
             isSimulating = true;
+            simRunId++;
             simStartTime = performance.now() * 0.001;
             maxObservedSwayMm = 0;
             maxObservedStressPct = 0;
@@ -3037,13 +3222,16 @@
             document.getElementById('run-text').textContent = 'Edit Structure';
             if (typeof updateViewToolsUI === 'function') setTimeout(updateViewToolsUI, 0);
 
-            showStatusMessage("Simulating gravity dead loads and lateral wind shear forces...");
+            showStatusMessage(isSeismic() ? "Shaking the ground: gravity + earthquake forces..." : "Simulating gravity dead loads and lateral wind shear forces...");
             analyzeStructuralTopology();
             buildWindArrowsVisual();
         }
 
         function stopSimulation() {
             isSimulating = false;
+            simRunId++;
+            environmentGroup.position.set(0, 0, 0);
+            footingsGroup.position.set(0, 0, 0);
             hideReportBanner();
             while (windArrowsGroup.children.length) {
                 windArrowsGroup.remove(windArrowsGroup.children[0]);
@@ -4121,9 +4309,11 @@
 
             ctx.save();
             // Wind resultant (line of action of the total wind force on this floor)
-            if (st.cp && windLevel > 0) {
-                ctx.strokeStyle = '#0ea5e9';
-                ctx.fillStyle = '#0ea5e9';
+            const resLabel = isSeismic() ? 'E' : 'W';
+            const resColor = isSeismic() ? '#ea580c' : '#0ea5e9';
+            if (st.cp && lateralActive()) {
+                ctx.strokeStyle = resColor;
+                ctx.fillStyle = resColor;
                 ctx.lineWidth = 2.2;
                 ctx.setLineDash([]);
                 ctx.beginPath();
@@ -4134,7 +4324,7 @@
                     ctx.beginPath(); ctx.moveTo(x1 + 9, y); ctx.lineTo(x1, y - 5); ctx.lineTo(x1, y + 5); ctx.closePath(); ctx.fill();
                     ctx.font = '600 9.5px "Roboto Mono", monospace';
                     ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
-                    ctx.fillText(`W = ${st.cp.F.toFixed(1)} kN`, x0 + 2, y - 3);
+                    ctx.fillText(`${resLabel} = ${st.cp.F.toFixed(1)} kN`, x0 + 2, y - 3);
                 } else {
                     const x = wx(st.cp.x);
                     const y0 = originY - padMargin * 0.85, y1 = originY + plotSpan * 0.55;
@@ -4142,7 +4332,7 @@
                     ctx.beginPath(); ctx.moveTo(x, y1 + 9); ctx.lineTo(x - 5, y1); ctx.lineTo(x + 5, y1); ctx.closePath(); ctx.fill();
                     ctx.font = '600 9.5px "Roboto Mono", monospace';
                     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-                    ctx.fillText(`W = ${st.cp.F.toFixed(1)} kN`, x + 5, y0 + 2);
+                    ctx.fillText(`${resLabel} = ${st.cp.F.toFixed(1)} kN`, x + 5, y0 + 2);
                 }
             }
 
@@ -4164,7 +4354,7 @@
                 ctx.fillText('CR', cx + 11, cy - 6);
 
                 // Eccentricity between CR and the wind resultant
-                if (st.cp && windLevel > 0) {
+                if (st.cp && lateralActive()) {
                     const e = windDir === 'x' ? st.cp.z - st.cr.z : st.cp.x - st.cr.x;
                     if (Math.abs(e) > 0.05) {
                         ctx.strokeStyle = '#dc2626';
@@ -4200,9 +4390,9 @@
                 const tw = ctx.measureText(label).width + 12;
                 const bx = originX - padMargin;
                 const by = Math.min(originY + plotSpan + padMargin + 38, planPane.clientHeight - 64);
-                ctx.fillStyle = st.torsionRatio > TORSION_LIMIT && windLevel > 0 ? 'rgba(254, 243, 199, 0.95)' : 'rgba(241, 245, 249, 0.95)';
+                ctx.fillStyle = st.torsionRatio > TORSION_LIMIT && lateralActive() ? 'rgba(254, 243, 199, 0.95)' : 'rgba(241, 245, 249, 0.95)';
                 ctx.fillRect(bx, by - 8, tw, 16);
-                ctx.fillStyle = st.torsionRatio > TORSION_LIMIT && windLevel > 0 ? '#b45309' : '#334155';
+                ctx.fillStyle = st.torsionRatio > TORSION_LIMIT && lateralActive() ? '#b45309' : '#334155';
                 ctx.fillText(label, bx + 6, by);
             }
             ctx.restore();
