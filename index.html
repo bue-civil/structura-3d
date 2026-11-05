@@ -68,6 +68,35 @@
             left: calc(12px + env(safe-area-inset-left, 0px));
         }
         body.ui-hidden .vt-run, body.ui-hidden .vt-chip { display: inline-flex; }
+        /* Mobile mode: member buttons + Run (bottom bar), 2D plan with level buttons, 3D view */
+        #mobile-bar { display: none; }
+        body.mobile-mode #mobile-bar {
+            display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+            gap: 4px; justify-content: space-between;
+            padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
+            background: rgba(255, 255, 255, 0.96); border-top: 1px solid #e2e8f0;
+            box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.08);
+        }
+        .mb-btn {
+            flex: 1 1 0; min-width: 0; height: 52px; border-radius: 12px; border: 1px solid #e2e8f0; background: #fff;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+            font: 600 10.5px 'Roboto', sans-serif; color: #334155;
+            touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+        }
+        .mb-btn .material-symbols-outlined { font-size: 22px; }
+        .mb-btn:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+        .mb-btn:active { transform: scale(0.96); }
+        .mb-ic-col { color: #2563eb; } .mb-ic-beam { color: #d97706; } .mb-ic-brace { color: #059669; } .mb-ic-floor { color: #4f46e5; }
+        .mb-btn.mb-active { background: #dbeafe; border-color: #2563eb; color: #1d4ed8; box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2); }
+        .mb-run { background: #2563eb; border-color: #1d4ed8; color: #fff; flex-grow: 1.2; }
+        .mb-exit { flex: 0 0 52px; color: #64748b; }
+        body.mobile-mode header,
+        body.mobile-mode #plan-viewonly-chip,
+        body.mobile-mode #plan-legend,
+        body.mobile-mode #canvas-container > div { display: none !important; }
+        body.mobile-mode #plan-level-row { top: calc(8px + env(safe-area-inset-top, 0px)) !important; }
+        body.mobile-mode #workspace-split { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); height: auto; }
+        body.mobile-mode #report-banner { top: calc(12px + env(safe-area-inset-top, 0px)); }
         body.ui-hidden #report-banner { top: calc(12px + env(safe-area-inset-top, 0px)); }
         .font-mono-code {
             font-family: 'Roboto Mono', monospace;
@@ -173,7 +202,7 @@
             <canvas id="plan-canvas" class="pointer-events-none"></canvas>
 
             <!-- Floor Plan Selector Controls in the vicinity of the 2D Plan -->
-            <div class="absolute top-20 left-3 right-3 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+            <div id="plan-level-row" class="absolute top-20 left-3 right-3 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
                 <div class="md-card pointer-events-auto rounded-xl p-1.5 flex flex-wrap items-center gap-1 shadow-sm">
                     <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 flex items-center gap-1">
                         <span class="material-symbols-outlined text-sm text-blue-600">layers</span>
@@ -186,14 +215,14 @@
                     <button id="plan-btn-4" onclick="selectPlanLevel(4)" class="md-btn px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-transparent">4th</button>
                 </div>
 
-                <div class="md-card pointer-events-auto rounded-xl px-2.5 py-1.5 flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
+                <div id="plan-viewonly-chip" class="md-card pointer-events-auto rounded-xl px-2.5 py-1.5 flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
                     <span class="material-symbols-outlined text-sm text-slate-400">visibility</span>
                     <span>2D Plan (View Only)</span>
                 </div>
             </div>
 
             <!-- 2D Plan Legend Bar -->
-            <div class="absolute bottom-3 left-3 right-3 z-10 pointer-events-none flex justify-center sm:justify-start">
+            <div id="plan-legend" class="absolute bottom-3 left-3 right-3 z-10 pointer-events-none flex justify-center sm:justify-start">
                 <div class="md-card rounded-xl px-3 py-2 flex flex-wrap items-center gap-3 text-[10px] font-medium text-slate-600">
                     <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-blue-600 inline-block"></span> Column</span>
                     <span class="flex items-center gap-1"><span class="w-3 h-1 bg-amber-600 inline-block"></span> Beam</span>
@@ -283,6 +312,9 @@
             <div id="view-tools" class="absolute left-3 z-30 flex items-center gap-1.5">
                 <button id="btn-hide-ui" onclick="toggleHideUI()" aria-pressed="false" class="vt-btn md-btn md-card" title="Hide all panels and use the 3D view full screen (H)">
                     <span class="material-symbols-outlined">fullscreen</span><span class="vt-label">Hide all</span>
+                </button>
+                <button id="btn-mobile-mode" onclick="toggleMobileMode()" aria-pressed="false" class="vt-btn md-btn md-card" title="Mobile mode: only the member buttons, Run and the 2D / 3D views">
+                    <span class="material-symbols-outlined">smartphone</span><span class="vt-label">Mobile</span>
                 </button>
                 <button id="btn-pan" onclick="togglePanMode()" aria-pressed="false" class="vt-btn md-btn md-card" title="Pan: drag to move the view up, down and sideways (P)">
                     <span class="material-symbols-outlined">pan_tool</span><span class="vt-label">Pan</span>
@@ -376,6 +408,16 @@
             </div>
         </div>
     </div>
+
+    <!-- Mobile mode bar: member buttons + Run + exit -->
+    <nav id="mobile-bar" aria-label="Mobile mode tools">
+        <button class="mb-btn" data-tool="column" onclick="selectTool('column')"><span class="material-symbols-outlined mb-ic-col">view_column</span><span>Column</span></button>
+        <button class="mb-btn" data-tool="beam" onclick="selectTool('beam')"><span class="material-symbols-outlined mb-ic-beam">horizontal_rule</span><span>Beam</span></button>
+        <button class="mb-btn" data-tool="brace" onclick="selectTool('brace')"><span class="material-symbols-outlined mb-ic-brace">close</span><span>Brace</span></button>
+        <button class="mb-btn" data-tool="floor" onclick="selectTool('floor')"><span class="material-symbols-outlined mb-ic-floor">grid_on</span><span>Floor</span></button>
+        <button id="mb-run" class="mb-btn mb-run" onclick="runFromViewTools()"><span class="material-symbols-outlined">play_arrow</span><span class="mb-run-label">Run</span></button>
+        <button class="mb-btn mb-exit" onclick="toggleMobileMode()" title="Leave mobile mode"><span class="material-symbols-outlined">close_fullscreen</span><span>Exit</span></button>
+    </nav>
 
     <!-- Top Single-Level Status & Diagnostics Bar -->
     <header class="fixed top-3 left-3 right-3 z-20 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
@@ -578,7 +620,7 @@
         let uiHidden = false;
         let panMode = false;
         const TOOL_LABELS = {
-            column: ['view_column', 'Column'], beam: ['horizontal_rule', 'Beam'], brace: ['texture', 'Brace'],
+            column: ['view_column', 'Column'], beam: ['horizontal_rule', 'Beam'], brace: ['close', 'Brace'],
             floor: ['grid_on', 'Floor Area'], connection: ['hub', 'Joint'], delete: ['delete', 'Delete']
         };
 
@@ -599,6 +641,16 @@
                 const t = TOOL_LABELS[currentTool] || ['build', currentTool];
                 chip.querySelector('.material-symbols-outlined').textContent = panMode ? 'pan_tool' : t[0];
                 chip.querySelector('.vt-label').textContent = panMode ? 'Panning' : t[1];
+            }
+            const mobBtn = document.getElementById('btn-mobile-mode');
+            if (mobBtn) mobBtn.setAttribute('aria-pressed', mobileMode ? 'true' : 'false');
+            document.querySelectorAll && document.querySelectorAll('#mobile-bar [data-tool]').forEach(b => {
+                b.classList.toggle('mb-active', b.dataset.tool === currentTool && !isSimulating);
+            });
+            const mbRun = document.getElementById('mb-run');
+            if (mbRun) {
+                mbRun.querySelector('.material-symbols-outlined').textContent = isSimulating ? 'stop' : 'play_arrow';
+                mbRun.querySelector('.mb-run-label').textContent = isSimulating ? 'Edit' : 'Run';
             }
             const runMini = document.getElementById('btn-run-mini');
             if (runMini) runMini.querySelector('.material-symbols-outlined').textContent = isSimulating ? 'stop' : 'play_arrow';
@@ -630,6 +682,18 @@
                 renderer.domElement.style.cursor = 'grab';
                 showStatusMessage('Pan off: drag to rotate, tap a grid point to build.');
             }
+            updateViewToolsUI();
+        }
+
+        let mobileMode = false;
+        function toggleMobileMode() {
+            mobileMode = !mobileMode;
+            if (mobileMode && uiHidden) {
+                uiHidden = false;
+                document.body.classList.remove('ui-hidden');
+            }
+            document.body.classList.toggle('mobile-mode', mobileMode);
+            resizeViewports();
             updateViewToolsUI();
         }
 
@@ -1846,6 +1910,7 @@
             if (e.key === '6') selectTool('delete');
             if (e.key === 'h' || e.key === 'H') toggleHideUI();
             if (e.key === 'p' || e.key === 'P') togglePanMode();
+            if (e.key === 'm' || e.key === 'M') toggleMobileMode();
             if (e.key === ' ' || e.key === 'Enter') {
                 e.preventDefault();
                 toggleSimulation();

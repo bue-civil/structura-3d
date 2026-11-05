@@ -13,7 +13,7 @@ An interactive 3D steel frame builder and stability simulator for school student
 - **Moment frames vs bracing:** moment frames resist sway by bending and come out far more flexible than braced frames, as in reality.
 - **Failure checks:** mechanisms (including floors spinning when all bracing lines meet at one point), members yielding, and excessive drift with P-Δ amplification. Failed members fall.
 - **Torsion demo:** the Sample button loads a frame braced on grid lines 2 and A with flexible moment frames on lines 3 and C, so the floors twist under wind. Brace lines 3 and C to fix it.
-- **Phones and tablets:** tap a grid point to place the selected member. **Hide all** clears every panel so the 3D model fills the screen while the last tool you picked (column, beam, brace…) stays active; a Run button stays on screen. **Pan** switches one-finger drag from rotating to moving the view up, down and sideways (pinch still zooms). Keyboard: H = Hide all, P = Pan.
+- **Phones and tablets:** tap a grid point to place the selected member. **Hide all** clears every panel so the 3D model fills the screen while the last tool you picked (column, beam, brace…) stays active; a Run button stays on screen. **Pan** switches one-finger drag from rotating to moving the view up, down and sideways (pinch still zooms). **Mobile mode** keeps only the member buttons (Column, Beam, Brace, Floor), Run and the 2D plan / 3D views, with a thumb-sized bar at the bottom of the screen. Keyboard: H = Hide all, P = Pan, M = Mobile mode.
 - **Exports:** PNG screenshot, 3D-printable binary STL (1:100, mm) and IFC 2x3 for Revit.
 
 ## Notes
