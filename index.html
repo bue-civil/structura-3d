@@ -70,6 +70,9 @@
         body.ui-hidden .vt-run, body.ui-hidden .vt-chip { display: inline-flex; }
         /* Mobile mode: member buttons + Run (bottom bar), 2D plan with level buttons, 3D view */
         #mobile-bar { display: none; }
+        /* A hidden result banner must never catch taps meant for the buttons under it */
+        #report-banner.opacity-0, #report-banner.opacity-0 * { pointer-events: none !important; }
+        #report-card { cursor: pointer; }
         #mobile-watermark { display: none; }
         #mobile-quake-toggle { display: none; }
         body.mobile-mode #mobile-quake-toggle {
@@ -113,6 +116,12 @@
         body.mobile-mode #plan-level-row { top: calc(8px + env(safe-area-inset-top, 0px)) !important; }
         body.mobile-mode #workspace-split { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); height: auto; }
         body.mobile-mode #report-banner { top: calc(12px + env(safe-area-inset-top, 0px)); }
+        @media (max-width: 768px) {
+            /* Phones: plan on top (42 %), 3D below. Put the banner at the top of the 3D view, clear of the level buttons. */
+            body.mobile-mode #report-banner {
+                top: calc((100vh - 66px - env(safe-area-inset-bottom, 0px)) * 0.42 + 8px);
+            }
+        }
         body.ui-hidden #report-banner { top: calc(12px + env(safe-area-inset-top, 0px)); }
         .font-mono-code {
             font-family: 'Roboto Mono', monospace;
@@ -514,7 +523,7 @@
 
     <!-- Non-intrusive Toast / Structural Report Banner -->
     <div id="report-banner" class="fixed top-24 left-1/2 -translate-x-1/2 z-20 pointer-events-none transition-all duration-300 opacity-0 -translate-y-3">
-        <div id="report-card" class="md-card pointer-events-auto rounded-2xl px-5 py-3 flex items-center gap-3 shadow-lg border-l-4 border-l-emerald-500" style="max-width:min(92vw,620px)">
+        <div id="report-card" onclick="hideReportBanner()" title="Tap to close" class="md-card pointer-events-auto rounded-2xl px-5 py-3 flex items-center gap-3 shadow-lg border-l-4 border-l-emerald-500" style="max-width:min(92vw,620px)">
             <span id="report-icon" class="material-symbols-outlined text-2xl text-emerald-600">verified</span>
             <div>
                 <div id="report-title" class="text-xs font-bold text-slate-800">Structure Stable</div>
