@@ -70,6 +70,12 @@
         body.ui-hidden .vt-run, body.ui-hidden .vt-chip { display: inline-flex; }
         /* Mobile mode: member buttons + Run (bottom bar), 2D plan with level buttons, 3D view */
         #mobile-bar { display: none; }
+        #mobile-watermark { display: none; }
+        body.mobile-mode #mobile-watermark {
+            display: block; position: absolute; z-index: 5; pointer-events: none; user-select: none;
+            right: max(12px, env(safe-area-inset-right, 0px)); bottom: 12px;
+            width: min(34%, 150px); height: auto; opacity: 0.22;
+        }
         body.mobile-mode #mobile-bar {
             display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
             gap: 3px; justify-content: space-between;
@@ -309,6 +315,9 @@
                     </button>
                 </div>
             </div>
+
+            <!-- Mobile mode watermark -->
+            <img id="mobile-watermark" src="assets/bue-logo.png" alt="" aria-hidden="true" onerror="this.remove()">
 
             <!-- View tools: Hide all / Pan / active tool (always visible, also on phones) -->
             <div id="view-tools" class="absolute left-3 z-30 flex items-center gap-1.5">
@@ -704,6 +713,8 @@
         const connectionsGroup = new THREE.Group();
         const collidersGroup = new THREE.Group();
         const windArrowsGroup = new THREE.Group();
+        const footingsGroup = new THREE.Group();
+        scene.add(footingsGroup);
         scene.add(environmentGroup);
         scene.add(membersGroup);
         scene.add(connectionsGroup);
@@ -1332,7 +1343,83 @@
             });
         }
 
+        /***********************************************************************
+         * AUTOMATIC PAD FOOTINGS under every ground-floor column
+         * 1.6 x 1.6 m reinforced concrete pad, 25 mm grout, 30 mm steel base plate
+         * and 4 anchor bolts with nuts. Added and removed with the columns.
+         ***********************************************************************/
+        const footingsMap = new Map(); // ground node key -> footing group
+        const FOOTING = { size: 1.6, depth: 0.36, plate: 0.5, plateT: 0.03, grout: 0.025 };
+        const footingConcreteMat = new THREE.MeshStandardMaterial({ color: 0xa8adb3, roughness: 0.85, metalness: 0.02 });
+        const footingGroutMat = new THREE.MeshStandardMaterial({ color: 0x8b9096, roughness: 0.9, metalness: 0.0 });
+        const footingPlateMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.4, metalness: 0.75 });
+
+        function createFootingMesh(node) {
+            const g = new THREE.Group();
+            const plateTop = 0.085;                    // matches the brace gusset seat at the base
+            const plateBot = plateTop - FOOTING.plateT;
+            const padTop = plateBot - FOOTING.grout;
+
+            const pad = new THREE.Mesh(SHARED_GEO.unitBox, footingConcreteMat);
+            pad.scale.set(FOOTING.size, FOOTING.depth, FOOTING.size);
+            pad.position.y = padTop - FOOTING.depth / 2;
+            pad.castShadow = true;
+            pad.receiveShadow = true;
+
+            const grout = new THREE.Mesh(SHARED_GEO.unitBox, footingGroutMat);
+            grout.scale.set(FOOTING.plate + 0.08, FOOTING.grout, FOOTING.plate + 0.08);
+            grout.position.y = padTop + FOOTING.grout / 2;
+
+            const plate = new THREE.Mesh(SHARED_GEO.unitBox, footingPlateMat);
+            plate.scale.set(FOOTING.plate, FOOTING.plateT, FOOTING.plate);
+            plate.position.y = plateBot + FOOTING.plateT / 2;
+            plate.castShadow = true;
+            g.add(pad, grout, plate);
+
+            for (const sx of [-1, 1]) {
+                for (const sz of [-1, 1]) {
+                    const rod = new THREE.Mesh(SHARED_GEO.boltShank, sharedBoltMat);
+                    rod.scale.set(1.5, 0.07, 1.5);
+                    rod.position.set(sx * 0.19, plateTop + 0.025, sz * 0.19);
+                    const nut = new THREE.Mesh(SHARED_GEO.boltNut, sharedBoltMat);
+                    nut.scale.set(1.4, 1, 1.4);
+                    nut.position.set(sx * 0.19, plateTop + 0.0085, sz * 0.19);
+                    g.add(rod, nut);
+                }
+            }
+            g.position.set(node.restPos.x, node.restPos.y, node.restPos.z);
+            return g;
+        }
+
+        function syncFootings() {
+            const needed = new Set();
+            for (let i = 0; i < members.length; i++) {
+                const m = members[i];
+                if (m.type !== 'column') continue;
+                const base = m.n1.gy === 0 ? m.n1 : (m.n2.gy === 0 ? m.n2 : null);
+                if (base) needed.add(base.key);
+            }
+            for (const [key, mesh] of footingsMap.entries()) {
+                if (!needed.has(key)) {
+                    footingsGroup.remove(mesh);
+                    footingsMap.delete(key);
+                    const nd = nodesMap.get(key);
+                    if (nd && nd.marker) nd.marker.visible = true;
+                }
+            }
+            needed.forEach(key => {
+                if (footingsMap.has(key)) return;
+                const nd = nodesMap.get(key);
+                if (!nd) return;
+                const mesh = createFootingMesh(nd);
+                footingsGroup.add(mesh);
+                footingsMap.set(key, mesh);
+                if (nd.marker) nd.marker.visible = false; // the footing replaces the small anchor marker
+            });
+        }
+
         function syncConnections() {
+            syncFootings();
             // 1. Remove any connections whose beam or supporting column at that node no longer exists
             for (const [key, conn] of connectionsMap.entries()) {
                 const beamStillExists = members.includes(conn.beam);
@@ -3080,6 +3167,7 @@
             braceConnectionsMap.forEach(g => disposeBraceConnection(g));
             braceConnectionsMap.clear();
             connectionRaycastTargets.length = 0;
+            syncFootings();
 
             updateCostAndCountsUI();
             if (!silent) {
@@ -3481,9 +3569,13 @@
                 if (obj.isMesh && obj.visible) meshesToExport.push(obj);
             });
 
+            footingsGroup.traverse(obj => {
+                if (obj.isMesh && obj.visible) meshesToExport.push(obj);
+            });
+
             // Include the concrete foundation pad and ground anchor plates from environmentGroup
             environmentGroup.traverse(obj => {
-                if (obj.isMesh && obj !== planLevelHighlightMesh && obj.geometry.type === 'BoxGeometry') {
+                if (obj.isMesh && obj.visible && obj !== planLevelHighlightMesh && obj.geometry.type === 'BoxGeometry') {
                     meshesToExport.push(obj);
                 }
             });
@@ -4429,6 +4521,20 @@
 
                     // Draw base footing pad on Ground Floor Plan
                     if (selectedPlanLevel === 0) {
+                        if (footingsMap.has(node.key)) {
+                            // Pad footing (1.6 m square, dashed: below ground)
+                            const half = (FOOTING.size / 2) / BAY_WIDTH * bayPx;
+                            planCtx.save();
+                            planCtx.fillStyle = 'rgba(168, 173, 179, 0.35)';
+                            planCtx.strokeStyle = '#64748b';
+                            planCtx.lineWidth = 1.2;
+                            planCtx.setLineDash([4, 3]);
+                            planCtx.beginPath();
+                            planCtx.rect(pt.x - half, pt.y - half, half * 2, half * 2);
+                            planCtx.fill();
+                            planCtx.stroke();
+                            planCtx.restore();
+                        }
                         planCtx.fillStyle = '#e2e8f0';
                         planCtx.strokeStyle = '#64748b';
                         planCtx.lineWidth = 1.2;
