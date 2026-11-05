@@ -86,10 +86,11 @@
         .mb-btn .material-symbols-outlined { font-size: 22px; }
         .mb-btn:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
         .mb-btn:active { transform: scale(0.96); }
-        .mb-ic-col { color: #2563eb; } .mb-ic-beam { color: #d97706; } .mb-ic-brace { color: #059669; } .mb-ic-floor { color: #4f46e5; }
+        .mb-ic-col { color: #2563eb; } .mb-ic-beam { color: #d97706; } .mb-ic-brace { color: #059669; } .mb-ic-floor { color: #4f46e5; } .mb-ic-joint { color: #9333ea; }
         .mb-btn.mb-active { background: #dbeafe; border-color: #2563eb; color: #1d4ed8; box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2); }
         .mb-run { background: #2563eb; border-color: #1d4ed8; color: #fff; flex-grow: 1.2; }
-        .mb-exit { flex: 0 0 52px; color: #64748b; }
+        .mb-exit { flex: 0 0 48px; color: #64748b; }
+        @media (max-width: 380px) { .mb-btn { font-size: 9.5px; } .mb-btn .material-symbols-outlined { font-size: 20px; } }
         body.mobile-mode header,
         body.mobile-mode #plan-viewonly-chip,
         body.mobile-mode #plan-legend,
@@ -316,9 +317,6 @@
                 <button id="btn-mobile-mode" onclick="toggleMobileMode()" aria-pressed="false" class="vt-btn md-btn md-card" title="Mobile mode: only the member buttons, Run and the 2D / 3D views">
                     <span class="material-symbols-outlined">smartphone</span><span class="vt-label">Mobile</span>
                 </button>
-                <button id="btn-pan" onclick="togglePanMode()" aria-pressed="false" class="vt-btn md-btn md-card" title="Pan: drag to move the view up, down and sideways (P)">
-                    <span class="material-symbols-outlined">pan_tool</span><span class="vt-label">Pan</span>
-                </button>
                 <button id="btn-run-mini" onclick="runFromViewTools()" class="vt-btn vt-run md-btn" title="Run / stop the wind analysis">
                     <span class="material-symbols-outlined">play_arrow</span>
                 </button>
@@ -415,6 +413,7 @@
         <button class="mb-btn" data-tool="beam" onclick="selectTool('beam')"><span class="material-symbols-outlined mb-ic-beam">horizontal_rule</span><span>Beam</span></button>
         <button class="mb-btn" data-tool="brace" onclick="selectTool('brace')"><span class="material-symbols-outlined mb-ic-brace">close</span><span>Brace</span></button>
         <button class="mb-btn" data-tool="floor" onclick="selectTool('floor')"><span class="material-symbols-outlined mb-ic-floor">grid_on</span><span>Floor</span></button>
+        <button class="mb-btn" data-tool="connection" onclick="selectTool('connection')" title="Tap a joint to switch Shear / Rigid"><span class="material-symbols-outlined mb-ic-joint">hub</span><span>Joint</span></button>
         <button id="mb-run" class="mb-btn mb-run" onclick="runFromViewTools()"><span class="material-symbols-outlined">play_arrow</span><span class="mb-run-label">Run</span></button>
         <button class="mb-btn mb-exit" onclick="toggleMobileMode()" title="Leave mobile mode"><span class="material-symbols-outlined">close_fullscreen</span><span>Exit</span></button>
     </nav>
@@ -618,7 +617,6 @@
          * VIEW TOOLS: Hide UI (full-screen 3D, last tool stays active) & Pan mode
          ***********************************************************************/
         let uiHidden = false;
-        let panMode = false;
         const TOOL_LABELS = {
             column: ['view_column', 'Column'], beam: ['horizontal_rule', 'Beam'], brace: ['close', 'Brace'],
             floor: ['grid_on', 'Floor Area'], connection: ['hub', 'Joint'], delete: ['delete', 'Delete']
@@ -626,21 +624,16 @@
 
         function updateViewToolsUI() {
             const hideBtn = document.getElementById('btn-hide-ui');
-            const panBtn = document.getElementById('btn-pan');
             const chip = document.getElementById('active-tool-chip');
             if (hideBtn) {
                 hideBtn.querySelector('.material-symbols-outlined').textContent = uiHidden ? 'visibility' : 'fullscreen';
                 hideBtn.querySelector('.vt-label').textContent = uiHidden ? 'Show all' : 'Hide all';
                 hideBtn.setAttribute('aria-pressed', uiHidden ? 'true' : 'false');
             }
-            if (panBtn) {
-                panBtn.classList.toggle('vt-on', panMode);
-                panBtn.setAttribute('aria-pressed', panMode ? 'true' : 'false');
-            }
             if (chip) {
                 const t = TOOL_LABELS[currentTool] || ['build', currentTool];
-                chip.querySelector('.material-symbols-outlined').textContent = panMode ? 'pan_tool' : t[0];
-                chip.querySelector('.vt-label').textContent = panMode ? 'Panning' : t[1];
+                chip.querySelector('.material-symbols-outlined').textContent = t[0];
+                chip.querySelector('.vt-label').textContent = t[1];
             }
             const mobBtn = document.getElementById('btn-mobile-mode');
             if (mobBtn) mobBtn.setAttribute('aria-pressed', mobileMode ? 'true' : 'false');
@@ -664,25 +657,6 @@
             if (!uiHidden) {
                 showStatusMessage('All panels are back.');
             }
-        }
-
-        function togglePanMode() {
-            panMode = !panMode;
-            if (panMode) {
-                controls.touches.ONE = THREE.TOUCH.PAN;
-                controls.mouseButtons.LEFT = THREE.MOUSE.PAN;
-                controls.screenSpacePanning = true;
-                if (ghostMesh) ghostMesh.visible = false;
-                hoveredCandidate = null;
-                renderer.domElement.style.cursor = 'move';
-                showStatusMessage('Pan on: drag up, down or sideways to move the view. Pinch to zoom. Tap Pan again to build.');
-            } else {
-                controls.touches.ONE = THREE.TOUCH.ROTATE;
-                controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
-                renderer.domElement.style.cursor = 'grab';
-                showStatusMessage('Pan off: drag to rotate, tap a grid point to build.');
-            }
-            updateViewToolsUI();
         }
 
         let mobileMode = false;
@@ -1751,7 +1725,7 @@
         }
 
         renderer.domElement.addEventListener('pointermove', (e) => {
-            if (isSimulating || isDraggingCamera || panMode) return;
+            if (isSimulating || isDraggingCamera) return;
             if (e.pointerType && e.pointerType !== 'mouse') return; // touch has no hover; taps are handled on pointerup
 
             // Throttle raycasting to ~40Hz (every 24ms) so rapid mouse motion stays silky smooth
@@ -1862,10 +1836,6 @@
             const moveDist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
             const isTouch = e.pointerType && e.pointerType !== 'mouse';
             if (moveDist > (isTouch ? 12 : 6) || isSimulating) return;
-            if (panMode) {
-                showStatusMessage('Pan is on: drag to move the view. Tap Pan again to go back to building.');
-                return;
-            }
             // Touch screens have no hover: find what is under the finger before acting on the tap
             if (isTouch) updateHoverAt(e.clientX, e.clientY);
 
@@ -1909,7 +1879,6 @@
             if (e.key === '5') selectTool('connection');
             if (e.key === '6') selectTool('delete');
             if (e.key === 'h' || e.key === 'H') toggleHideUI();
-            if (e.key === 'p' || e.key === 'P') togglePanMode();
             if (e.key === 'm' || e.key === 'M') toggleMobileMode();
             if (e.key === ' ' || e.key === 'Enter') {
                 e.preventDefault();
@@ -4526,6 +4495,12 @@
             if (!loadSavedProgressFromStorage()) {
                 loadSampleFrame();
             }
+            // Phones open straight into Mobile mode
+            try {
+                const isPhone = window.matchMedia('(pointer: coarse)').matches &&
+                    Math.min(window.screen.width, window.screen.height) <= 820;
+                if (isPhone && !mobileMode) toggleMobileMode();
+            } catch (e) { /* matchMedia unavailable: stay in the full layout */ }
             animate();
         };
     </script>
