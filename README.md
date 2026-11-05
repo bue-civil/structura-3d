@@ -2,7 +2,7 @@
 
 An interactive 3D steel frame builder and stability simulator for school students. Build a frame from columns, beams, braces and floor slabs, then load it with wind and watch how it sways, twists or collapses.
 
-**Live page:** https://yassernasrsaleh.github.io/structura-3d/
+**Live page:** https://bue-civil.github.io/structura-3d/
 
 ## Features
 - **Build in 3D** on a 4 × 4 grid (4 m bays), up to 4 storeys (3.5 m). A read-only 2D floor plan follows each level.
