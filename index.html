@@ -39,6 +39,9 @@
         body {
             position: relative;
         }
+        @media (max-width: 640px) {
+            #credits-card { bottom: 124px !important; }
+        }
         .font-mono-code {
             font-family: 'Roboto Mono', monospace;
         }
@@ -246,6 +249,18 @@
                         </div>
                         <span id="count-floor" class="px-1.5 py-0.5 text-[10px] font-mono-code font-bold rounded-full bg-indigo-100 text-indigo-800" title="Placed Floor Slabs">0</span>
                     </button>
+                </div>
+            </div>
+
+            <!-- Institutional credits (BUE + Faculty of Engineering logos, developer credit) -->
+            <div id="credits-card" class="absolute right-3 z-10 pointer-events-none" style="bottom: 76px;">
+                <div class="md-card rounded-xl px-2.5 py-1.5 flex items-center gap-2.5 shadow-sm">
+                    <img id="logo-bue" src="assets/bue-logo.png" alt="The British University in Egypt (BUE)" class="h-8 sm:h-10 w-auto object-contain" onerror="this.remove()">
+                    <img id="logo-foe" src="assets/foe-logo.png" alt="BUE Faculty of Engineering" class="h-8 sm:h-10 w-auto object-contain" onerror="this.remove()">
+                    <div class="text-[9px] sm:text-[10px] leading-tight text-slate-600 border-l border-slate-200 pl-2.5">
+                        <div class="font-semibold text-slate-700">Developed by YN</div>
+                        <div>Civil Engineering Department</div>
+                    </div>
                 </div>
             </div>
 
@@ -3088,7 +3103,7 @@
                 ctx.fillText(`STRUCTURA 3D // Total Cost: $${totalCost.toLocaleString()}`, 30, 35);
                 ctx.fillStyle = '#94a3b8';
                 ctx.font = '500 11px "Roboto Mono", monospace';
-                ctx.fillText(`${PLAN_NAMES[selectedPlanLevel]} | Saved ${new Date().toLocaleTimeString()}`, 30, 51);
+                ctx.fillText(`${PLAN_NAMES[selectedPlanLevel]} | Saved ${new Date().toLocaleTimeString()} | Developed by YN, Civil Engineering Department, BUE`, 30, 51);
 
                 // Offer the PNG screenshot
                 const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
