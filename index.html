@@ -72,6 +72,19 @@
         #mobile-watermark { display: none; }
         #mobile-quake-toggle { display: none; }
         #mobile-stats { display: none; }
+        #mobile-file { display: none; }
+        body.mobile-mode #mobile-file {
+            display: flex; gap: 4px; position: absolute; z-index: 15;
+            top: 8px; right: max(8px, env(safe-area-inset-right, 0px));
+        }
+        #mobile-file button {
+            width: 34px; height: 34px; border-radius: 10px; border: 1px solid #e2e8f0;
+            background: rgba(255, 255, 255, 0.92); color: #334155;
+            display: inline-flex; align-items: center; justify-content: center;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08); touch-action: manipulation;
+        }
+        #mobile-file button .material-symbols-outlined { font-size: 19px; }
+        #mobile-file button:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
         body.mobile-mode #mobile-stats {
             display: flex; flex-direction: column; gap: 2px;
             position: absolute; z-index: 15; pointer-events: none;
@@ -239,15 +252,16 @@
             <!-- Floor Plan Selector Controls in the vicinity of the 2D Plan -->
             <div id="plan-level-row" class="absolute top-20 left-3 right-3 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
                 <div class="md-card pointer-events-auto rounded-xl p-1.5 flex flex-wrap items-center gap-1 shadow-sm">
-                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 flex items-center gap-1">
-                        <span class="material-symbols-outlined text-sm text-blue-600">layers</span>
-                        Plan Level
-                    </span>
-                    <button id="plan-btn-0" onclick="selectPlanLevel(0)" class="md-btn plan-btn-active px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-transparent">Ground</button>
-                    <button id="plan-btn-1" onclick="selectPlanLevel(1)" class="md-btn px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-transparent">1st</button>
-                    <button id="plan-btn-2" onclick="selectPlanLevel(2)" class="md-btn px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-transparent">2nd</button>
-                    <button id="plan-btn-3" onclick="selectPlanLevel(3)" class="md-btn px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-transparent">3rd</button>
-                    <button id="plan-btn-4" onclick="selectPlanLevel(4)" class="md-btn px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-transparent">4th</button>
+                    <button id="plan-mode-btn" onclick="cyclePlanViewMode()" class="md-btn text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-blue-700 hover:bg-blue-50 border border-slate-200 rounded-lg px-2 py-1 flex items-center gap-1" title="Switch between floor plans and side views">
+                        <span id="plan-mode-icon" class="material-symbols-outlined text-sm text-blue-600">layers</span>
+                        <span id="plan-mode-label">Plan Level</span>
+                        <span class="material-symbols-outlined text-sm text-slate-400">sync_alt</span>
+                    </button>
+                    <button id="plan-btn-0" onclick="onPlanButton(0)" class="md-btn plan-btn-active px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-transparent">Ground</button>
+                    <button id="plan-btn-1" onclick="onPlanButton(1)" class="md-btn px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-transparent">1st</button>
+                    <button id="plan-btn-2" onclick="onPlanButton(2)" class="md-btn px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-transparent">2nd</button>
+                    <button id="plan-btn-3" onclick="onPlanButton(3)" class="md-btn px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-transparent">3rd</button>
+                    <button id="plan-btn-4" onclick="onPlanButton(4)" class="md-btn px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-transparent">4th</button>
                 </div>
 
                 <button id="mobile-quake-toggle" onclick="toggleQuakeLevel()" class="md-btn md-card pointer-events-auto" title="Earthquake strength">
@@ -354,6 +368,13 @@
                 <div class="ms-row"><span class="ms-k">Total cost</span><span id="ms-cost" class="ms-v ms-cost">$0</span></div>
             </aside>
 
+            <!-- Mobile mode: Save / Open as icons -->
+            <aside id="mobile-file" aria-label="Save or open">
+                <button onclick="saveProjectFile()" title="Save" aria-label="Save"><span class="material-symbols-outlined">save</span></button>
+                <button onclick="openProjectFile()" title="Open" aria-label="Open"><span class="material-symbols-outlined">folder_open</span></button>
+            </aside>
+            <input id="project-file-input" type="file" accept=".json,application/json" hidden>
+
             <!-- Mobile mode watermark -->
             <img id="mobile-watermark" src="assets/bue-logo.png" alt="" aria-hidden="true" onerror="this.remove()">
 
@@ -427,10 +448,20 @@
                         <span class="hidden md:inline">Clear</span>
                     </button>
 
+                    <!-- Save project file / Open project file -->
+                    <button id="btn-save-file" onclick="saveProjectFile()" class="md-btn px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-1 text-[11px] font-semibold" title="Save this structure as a file you can open again or share">
+                        <span class="material-symbols-outlined text-base text-slate-600">save</span>
+                        <span class="hidden md:inline">Save</span>
+                    </button>
+                    <button id="btn-open-file" onclick="openProjectFile()" class="md-btn px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-1 text-[11px] font-semibold" title="Open a saved structure file">
+                        <span class="material-symbols-outlined text-base text-slate-600">folder_open</span>
+                        <span class="hidden md:inline">Open</span>
+                    </button>
+
                     <!-- Save Progress & Download Screenshot -->
                     <button id="btn-save-snap" onclick="saveProgressAndScreenshot()" class="md-btn px-2.5 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 flex items-center gap-1 text-[11px] font-semibold" title="Save Latest Progress & Download Local Screenshot (.PNG)">
                         <span class="material-symbols-outlined text-base text-emerald-600">photo_camera</span>
-                        <span class="hidden md:inline">Save & Snap</span>
+                        <span class="hidden md:inline">Snapshot</span>
                     </button>
 
                     <!-- Export 3D Printable .STL File -->
@@ -491,6 +522,16 @@
                     <div id="metric-cost" class="font-mono-code text-sm font-bold text-emerald-700">$0</div>
                 </div>
                 <div class="h-7 w-px bg-slate-200"></div>
+                <div title="Plan area the building covers: bays with a floor slab on any level, or enclosed by four ground-floor columns">
+                    <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Footprint</div>
+                    <div id="metric-footprint" class="font-mono-code text-sm font-bold text-slate-700">0 m²</div>
+                </div>
+                <div class="h-7 w-px bg-slate-200"></div>
+                <div title="All Floor Area slabs added together (16 m² each)">
+                    <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Floor Area</div>
+                    <div id="metric-floorarea" class="font-mono-code text-sm font-bold text-slate-700">0 m²</div>
+                </div>
+                <div class="h-7 w-px bg-slate-200"></div>
                 <div>
                     <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Steel Mass</div>
                     <div id="metric-tonnage" class="font-mono-code text-sm font-bold text-violet-700">0.00 t</div>
@@ -499,11 +540,6 @@
                 <div>
                     <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Max Drift / Sway</div>
                     <div id="metric-sway" class="font-mono-code text-sm font-semibold text-slate-700">0.0 mm</div>
-                </div>
-                <div class="h-7 w-px bg-slate-200"></div>
-                <div>
-                    <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Peak Stress</div>
-                    <div id="metric-stress" class="font-mono-code text-sm font-semibold text-slate-700">0%</div>
                 </div>
                 <div class="h-7 w-px bg-slate-200"></div>
                 <div title="Torsion ratio = largest column drift / average column drift in a storey. Above 1.2x the building is torsionally irregular (twists).">
@@ -530,7 +566,7 @@
                 <span id="wind-icon" class="material-symbols-outlined text-base text-sky-600">air</span>
                 <span><span id="wind-prefix">Wind:</span> <strong id="wind-label">Storm 150 km/h</strong></span>
             </button>
-            <button id="btn-wind-dir" onclick="toggleWindDirection()" class="md-btn rounded-xl px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center gap-1.5 text-xs font-medium border border-slate-200" title="Switch the wind / shaking direction (along X or along Z)">
+            <button id="btn-wind-dir" onclick="toggleWindDirection()" class="md-btn rounded-xl px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center gap-1.5 text-xs font-medium border border-slate-200" title="Switch the wind / shaking direction (along X or along Y)">
                 <span id="wind-dir-icon" class="material-symbols-outlined text-base text-sky-600">east</span>
                 <span>Dir: <strong id="wind-dir-label">+X</strong></span>
             </button>
@@ -1642,10 +1678,14 @@
                 }
             }
             const fmtArea = a => `${a.toLocaleString()} m²`;
-            const fpEl = document.getElementById('ms-footprint');
-            if (fpEl) fpEl.textContent = fmtArea(cells.size * bayArea);
-            const flEl = document.getElementById('ms-floor');
-            if (flEl) flEl.textContent = fmtArea(counts.floor * bayArea);
+            ['ms-footprint', 'metric-footprint'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = fmtArea(cells.size * bayArea);
+            });
+            ['ms-floor', 'metric-floorarea'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = fmtArea(counts.floor * bayArea);
+            });
             const mcEl = document.getElementById('ms-cost');
             if (mcEl) mcEl.textContent = `$${totalCost.toLocaleString()}`;
 
@@ -2716,7 +2756,7 @@
             if (mqb) mqb.classList.toggle('mq-severe', quakeLevel === 1);
             const dl = document.getElementById('wind-dir-label');
             const di = document.getElementById('wind-dir-icon');
-            if (dl) dl.textContent = windDir === 'x' ? '+X' : '+Z';
+            if (dl) dl.textContent = windDir === 'x' ? '+X' : '+Y';
             if (di) di.textContent = windDir === 'x' ? 'east' : 'south';
         }
 
@@ -2755,8 +2795,8 @@
             updateWindLabels();
             if (isSimulating) rerunAnalysis();
             else if (!silent) showStatusMessage(isSeismic()
-                ? `Load case: earthquake. ${quakeText()} shaking along ${windDir === 'x' ? 'X' : 'Z'}.`
-                : `Load case: wind. ${windText()} blowing along ${windDir === 'x' ? '+X' : '+Z'}.`);
+                ? `Load case: earthquake. ${quakeText()} shaking along ${windDir === 'x' ? 'X' : 'Y'}.`
+                : `Load case: wind. ${windText()} blowing along ${windDir === 'x' ? '+X' : '+Y'}.`);
         }
 
         function toggleHazard() { setHazard(isSeismic() ? 'wind' : 'seismic'); }
@@ -2766,10 +2806,10 @@
             updateWindLabels();
             if (isSimulating) rerunAnalysis();
             else showStatusMessage(isSeismic()
-                ? `The ground now shakes along ${windDir === 'x' ? 'X' : 'Z'}.`
+                ? `The ground now shakes along ${windDir === 'x' ? 'X' : 'Y'}.`
                 : (windDir === 'x'
                     ? 'Wind now blows along +X (hits grid line A first).'
-                    : 'Wind now blows along +Z (hits grid line 1 first).'));
+                    : 'Wind now blows along +Y (hits grid line 1 first).'));
         }
 
         function buildWindArrowsVisual() {
@@ -3087,12 +3127,12 @@
             } else {
                 showReportBanner(state, title, desc);
             }
-            showStatusMessage(`Analysed ${members.length} members (${res.dof} DOF) for gravity + ${loadName} along ${windDir === 'x' ? 'X' : 'Z'}.`);
+            showStatusMessage(`Analysed ${members.length} members (${res.dof} DOF) for gravity + ${loadName} along ${windDir === 'x' ? 'X' : 'Y'}.`);
         }
 
         function updateTelemetry(driftRatio, torsRatio) {
             const swayEl = document.getElementById('metric-sway');
-            const stressEl = document.getElementById('metric-stress');
+            const stressEl = document.getElementById('metric-stress') || { textContent: '', className: '' };
             const torsEl = document.getElementById('metric-torsion');
             const hTxt = driftRatio > 1e-9 ? ` · H/${Math.round(1 / driftRatio)}` : '';
             swayEl.textContent = `${maxObservedSwayMm.toFixed(1)} mm${hTxt}`;
@@ -3345,8 +3385,11 @@
 
             document.getElementById('metric-sway').textContent = '0.0 mm';
             document.getElementById('metric-sway').className = 'font-mono-code text-sm font-semibold text-slate-700';
-            document.getElementById('metric-stress').textContent = '0%';
-            document.getElementById('metric-stress').className = 'font-mono-code text-sm font-semibold text-slate-700';
+            const stressReset = document.getElementById('metric-stress');
+            if (stressReset) {
+                stressReset.textContent = '0%';
+                stressReset.className = 'font-mono-code text-sm font-semibold text-slate-700';
+            }
 
             updateGhostPreview();
             showStatusMessage("Returned to Build Mode. Add or remove members and Floor Area slabs.");
@@ -3539,8 +3582,19 @@
                 const raw = localStorage.getItem(STORAGE_KEY);
                 if (!raw) return false;
                 const data = JSON.parse(raw);
-                if (!data || !Array.isArray(data.members) || data.members.length === 0) return false;
+                if (!applyStructureState(data)) return false;
+                const totalCost = updateCostAndCountsUI();
+                showStatusMessage(`Restored saved project ($${totalCost.toLocaleString()}) from this browser.`);
+                return true;
+            } catch (err) {
+                return false;
+            }
+        }
 
+        // Rebuilds the structure from a saved state object (browser storage or a project file)
+        function applyStructureState(data) {
+            if (!data || !Array.isArray(data.members) || data.members.length === 0) return false;
+            {
                 clearStructure(true);
 
                 // Place linear members first so beams exist before floor slabs are validated
@@ -3579,13 +3633,62 @@
                 if (typeof data.selectedPlanLevel === 'number') {
                     selectPlanLevel(data.selectedPlanLevel, true);
                 }
-
-                const totalCost = updateCostAndCountsUI();
-                showStatusMessage(`Restored saved project ($${totalCost.toLocaleString()}) from local storage.`);
+                if (typeof data.windLevel === 'number' && WIND_LEVELS[data.windLevel]) windLevel = data.windLevel;
+                if (typeof data.quakeLevel === 'number' && QUAKE_LEVELS[data.quakeLevel]) quakeLevel = data.quakeLevel;
+                if (data.windDir === 'x' || data.windDir === 'z') windDir = data.windDir;
+                if (!mobileMode && (data.hazard === 'wind' || data.hazard === 'seismic')) hazard = data.hazard;
+                updateWindLabels();
+                updateCostAndCountsUI();
                 return true;
-            } catch (err) {
-                return false;
             }
+        }
+
+        function saveProjectFile() {
+            const state = serializeStructureState();
+            if (!state.members.length) {
+                showStatusMessage('Nothing to save yet: place some members first.', true);
+                return;
+            }
+            const file = Object.assign({ app: 'STRUCTURA 3D', fileVersion: 1 }, state, { hazard, quakeLevel, windDir });
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { /* storage blocked */ }
+            const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+            const blob = new Blob([JSON.stringify(file, null, 1)], { type: 'application/json' });
+            offerFile(`structura-${stamp}.json`, blob).then(result => {
+                if (!result.ok) { reportSaveFailure(result, 'Project file'); return; }
+                playSound('stable');
+                showStatusMessage(`Saved ${result.name}. Open it here later, or send it to a friend to open in STRUCTURA.`);
+            });
+        }
+
+        function openProjectFile() {
+            const input = document.getElementById('project-file-input');
+            if (!input) return;
+            input.value = '';
+            input.onchange = () => {
+                const f = input.files && input.files[0];
+                if (!f) return;
+                const reader = new FileReader();
+                reader.onload = () => {
+                    let data = null;
+                    try { data = JSON.parse(reader.result); } catch (e) { data = null; }
+                    if (!data || !Array.isArray(data.members)) {
+                        showStatusMessage('That file is not a STRUCTURA project. Choose a .json file saved with the Save button.', true);
+                        return;
+                    }
+                    if (isSimulating) stopSimulation();
+                    if (!applyStructureState(data)) {
+                        showStatusMessage('That project file is empty.', true);
+                        return;
+                    }
+                    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeStructureState())); } catch (e) { /* storage blocked */ }
+                    const totalCost = updateCostAndCountsUI();
+                    playSound('place');
+                    showStatusMessage(`Opened ${f.name}: ${members.length} members, $${totalCost.toLocaleString()}.`);
+                };
+                reader.onerror = () => showStatusMessage('Could not read that file. Try choosing it again.', true);
+                reader.readAsText(f);
+            };
+            input.click();
         }
 
         function saveProgressAndScreenshot() {
@@ -4223,6 +4326,317 @@
             'FOURTH FLOOR PLAN (EL. +14.0 m)'
         ];
 
+        /***********************************************************************
+         * 2D PANE MODES: floor plan, side view S-N (grid lines 1-4), side view E-W (grid lines A-D)
+         ***********************************************************************/
+        let planViewMode = 'plan'; // 'plan' | 'sn' | 'ew'
+        let selectedAxis = 0;
+        const PLAN_LEVEL_LABELS = ['Ground', '1st', '2nd', '3rd', '4th'];
+        const PLAN_MODES = {
+            plan: { label: 'Plan Level', icon: 'layers' },
+            sn: { label: 'Side S-N', icon: 'view_week' },
+            ew: { label: 'Side E-W', icon: 'view_week' }
+        };
+
+        function axisName(mode, i) {
+            return mode === 'sn' ? GRID_ROW_LABELS[i] : GRID_COL_LABELS[i];
+        }
+
+        function refreshPlanButtons() {
+            const m = PLAN_MODES[planViewMode];
+            const lbl = document.getElementById('plan-mode-label');
+            const ic = document.getElementById('plan-mode-icon');
+            if (lbl) lbl.textContent = m.label;
+            if (ic) ic.textContent = m.icon;
+            for (let i = 0; i <= MAX_LEVELS; i++) {
+                const btn = document.getElementById(`plan-btn-${i}`);
+                if (!btn) continue;
+                if (planViewMode === 'plan') {
+                    btn.hidden = false;
+                    btn.textContent = PLAN_LEVEL_LABELS[i];
+                    btn.classList.toggle('plan-btn-active', i === selectedPlanLevel);
+                } else {
+                    btn.hidden = i >= GRID_SIZE;
+                    btn.textContent = i < GRID_SIZE ? `Axis ${axisName(planViewMode, i)}` : '';
+                    btn.classList.toggle('plan-btn-active', i === selectedAxis);
+                }
+            }
+        }
+
+        function updatePlanHighlight() {
+            if (!planLevelHighlightMesh) return;
+            if (planViewMode === 'plan') {
+                planLevelHighlightMesh.rotation.set(-Math.PI / 2, 0, 0);
+                planLevelHighlightMesh.scale.set(1, 1, 1);
+                planLevelHighlightMesh.position.set(0, selectedPlanLevel * STORY_HEIGHT + 0.03, 0);
+                return;
+            }
+            const offset = ((GRID_SIZE - 1) * BAY_WIDTH) / 2;
+            const hTot = MAX_LEVELS * STORY_HEIGHT + 0.6;
+            const base = planLevelHighlightMesh.geometry.parameters ? planLevelHighlightMesh.geometry.parameters.height : hTot;
+            planLevelHighlightMesh.scale.set(1, hTot / (base || hTot), 1);
+            const along = selectedAxis * BAY_WIDTH - offset;
+            if (planViewMode === 'sn') {
+                planLevelHighlightMesh.rotation.set(0, 0, 0);
+                planLevelHighlightMesh.position.set(0, hTot / 2 - 0.3, along);
+            } else {
+                planLevelHighlightMesh.rotation.set(0, Math.PI / 2, 0);
+                planLevelHighlightMesh.position.set(along, hTot / 2 - 0.3, 0);
+            }
+        }
+
+        function cyclePlanViewMode() {
+            planViewMode = planViewMode === 'plan' ? 'sn' : (planViewMode === 'sn' ? 'ew' : 'plan');
+            refreshPlanButtons();
+            updatePlanHighlight();
+            playSound('place');
+            if (planViewMode === 'plan') {
+                showStatusMessage('Floor plans: pick a level.');
+            } else {
+                showStatusMessage(planViewMode === 'sn'
+                    ? `Side view S-N: looking along grid lines 1 to 4. Showing axis ${axisName('sn', selectedAxis)}.`
+                    : `Side view E-W: looking along grid lines A to D. Showing axis ${axisName('ew', selectedAxis)}.`);
+            }
+            render2DPlan();
+        }
+
+        function onPlanButton(i) {
+            if (planViewMode === 'plan') { selectPlanLevel(i); return; }
+            if (i >= GRID_SIZE) return;
+            selectedAxis = i;
+            refreshPlanButtons();
+            updatePlanHighlight();
+            playSound('place');
+            showStatusMessage(`Side view ${planViewMode === 'sn' ? 'S-N' : 'E-W'}: axis ${axisName(planViewMode, i)}.`);
+            render2DPlan();
+        }
+
+        // Elevation drawing of one grid line: members in that vertical plane, slab edges, joints and footings
+        function renderSideView(w, h) {
+            const ctx = planCtx;
+            const sn = planViewMode === 'sn';
+            const k = selectedAxis;
+            const onLine = nd => (sn ? nd.gz === k : nd.gx === k);
+            const hIdx = nd => (sn ? nd.gx : nd.gz);
+            const hLabels = sn ? GRID_COL_LABELS : GRID_ROW_LABELS;
+
+            const mobile = document.body.classList.contains('mobile-mode');
+            const topPad = mobile ? 104 : 140;
+            const bottomPad = 56;
+            const sidePad = 64;
+            const spanM = (GRID_SIZE - 1) * BAY_WIDTH;
+            const heightM = MAX_LEVELS * STORY_HEIGHT;
+            const belowM = 1.3; // footing depth shown below ground
+            const ppm = Math.max(4, Math.min((w - sidePad * 2) / spanM, (h - topPad - bottomPad) / (heightM + belowM + 0.8)));
+            const x0 = (w - spanM * ppm) / 2;
+            const yG = topPad + 0.8 * ppm + heightM * ppm; // ground line (y = 0)
+            const toXY = (nd, useSim = true) => {
+                let hx = hIdx(nd) * BAY_WIDTH, vy = nd.gy * STORY_HEIGHT;
+                if (useSim && isSimulating) {
+                    hx += sn ? nd.simPos.x - nd.restPos.x : nd.simPos.z - nd.restPos.z;
+                    vy += nd.simPos.y - nd.restPos.y;
+                }
+                return { x: x0 + hx * ppm, y: yG - vy * ppm };
+            };
+
+            // Ground and soil
+            ctx.save();
+            ctx.fillStyle = '#efe9df';
+            ctx.fillRect(x0 - sidePad * 0.7, yG, spanM * ppm + sidePad * 1.4, belowM * ppm + 6);
+            ctx.strokeStyle = '#78716c';
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            ctx.moveTo(x0 - sidePad * 0.7, yG);
+            ctx.lineTo(x0 + spanM * ppm + sidePad * 0.7, yG);
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(120, 113, 108, 0.35)';
+            ctx.lineWidth = 1;
+            for (let xx = x0 - sidePad * 0.7; xx < x0 + spanM * ppm + sidePad * 0.7; xx += 9) {
+                ctx.beginPath();
+                ctx.moveTo(xx, yG + 2);
+                ctx.lineTo(xx - 6, yG + 8);
+                ctx.stroke();
+            }
+            ctx.restore();
+
+            // Grid lines (vertical) with bubbles, level lines (horizontal) with labels
+            ctx.save();
+            ctx.setLineDash([5, 4]);
+            ctx.strokeStyle = 'rgba(100, 116, 139, 0.45)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < GRID_SIZE; i++) {
+                const x = x0 + i * BAY_WIDTH * ppm;
+                ctx.beginPath();
+                ctx.moveTo(x, topPad + 6);
+                ctx.lineTo(x, yG + belowM * ppm);
+                ctx.stroke();
+            }
+            for (let l = 0; l <= MAX_LEVELS; l++) {
+                const y = yG - l * STORY_HEIGHT * ppm;
+                ctx.beginPath();
+                ctx.moveTo(x0 - 10, y);
+                ctx.lineTo(x0 + spanM * ppm + 10, y);
+                ctx.stroke();
+            }
+            ctx.setLineDash([]);
+            for (let i = 0; i < GRID_SIZE; i++) {
+                const x = x0 + i * BAY_WIDTH * ppm;
+                ctx.fillStyle = '#ffffff';
+                ctx.strokeStyle = '#334155';
+                ctx.lineWidth = 1.3;
+                ctx.beginPath();
+                ctx.arc(x, topPad - 8, 10, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+                ctx.fillStyle = '#0f172a';
+                ctx.font = '700 11px "Roboto", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(hLabels[i], x, topPad - 8);
+            }
+            ctx.font = '600 9.5px "Roboto Mono", monospace';
+            ctx.textAlign = 'right';
+            ctx.fillStyle = '#64748b';
+            for (let l = 0; l <= MAX_LEVELS; l++) {
+                const y = yG - l * STORY_HEIGHT * ppm;
+                ctx.fillText(PLAN_LEVEL_LABELS[l], x0 - 14, y - 6);
+                ctx.fillText(`+${(l * STORY_HEIGHT).toFixed(1)}`, x0 - 14, y + 6);
+            }
+            ctx.restore();
+
+            // Footings under ground columns on this line
+            footingsMap.forEach((mesh, key) => {
+                const nd = nodesMap.get(key);
+                if (!nd || !onLine(nd)) return;
+                const cx = x0 + hIdx(nd) * BAY_WIDTH * ppm;
+                const pedTopY = yG - 0.03 * ppm;
+                const pedBotY = yG + (FOOTING.pedH - 0.03) * ppm;
+                ctx.save();
+                ctx.fillStyle = '#c4c8cd';
+                ctx.strokeStyle = '#64748b';
+                ctx.lineWidth = 1.1;
+                ctx.fillRect(cx - FOOTING.ped / 2 * ppm, pedTopY, FOOTING.ped * ppm, pedBotY - pedTopY);
+                ctx.strokeRect(cx - FOOTING.ped / 2 * ppm, pedTopY, FOOTING.ped * ppm, pedBotY - pedTopY);
+                ctx.fillRect(cx - FOOTING.size / 2 * ppm, pedBotY, FOOTING.size * ppm, FOOTING.depth * ppm);
+                ctx.strokeRect(cx - FOOTING.size / 2 * ppm, pedBotY, FOOTING.size * ppm, FOOTING.depth * ppm);
+                ctx.fillStyle = '#334155';
+                ctx.fillRect(cx - FOOTING.plate / 2 * ppm, yG - 0.085 * ppm - 2, FOOTING.plate * ppm, 3);
+                ctx.restore();
+            });
+
+            const line = (a, b, color, width, dash) => {
+                ctx.save();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = width;
+                ctx.lineCap = 'round';
+                if (dash) ctx.setLineDash(dash);
+                ctx.beginPath();
+                ctx.moveTo(a.x, a.y);
+                ctx.lineTo(b.x, b.y);
+                ctx.stroke();
+                ctx.restore();
+            };
+
+            // Slab edges on this line (floor slabs that have an edge along the axis)
+            for (const m of members) {
+                if (m.type !== 'floor' || m.failed) continue;
+                const edge = m.corners.filter(onLine);
+                if (edge.length !== 2) continue;
+                const a = toXY(edge[0]), b = toXY(edge[1]);
+                const t = Math.max(4, 0.2 * ppm);
+                ctx.save();
+                ctx.fillStyle = stressColorCSS(m.stress, 'rgba(99, 102, 241, 0.55)');
+                ctx.beginPath();
+                ctx.moveTo(a.x, a.y - 2);
+                ctx.lineTo(b.x, b.y - 2);
+                ctx.lineTo(b.x, b.y - 2 - t);
+                ctx.lineTo(a.x, a.y - 2 - t);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // Braces, beams, columns in this plane
+            for (const m of members) {
+                if (m.type !== 'brace' || m.failed || !onLine(m.n1) || !onLine(m.n2)) continue;
+                line(toXY(m.n1), toXY(m.n2), stressColorCSS(m.stress, '#059669'), 3.5);
+            }
+            for (const m of members) {
+                if (m.type !== 'beam' || m.failed || !onLine(m.n1) || !onLine(m.n2)) continue;
+                line(toXY(m.n1), toXY(m.n2), stressColorCSS(m.stress, '#d97706'), 5);
+            }
+            for (const m of members) {
+                if (m.type !== 'column' || m.failed || !onLine(m.n1) || !onLine(m.n2)) continue;
+                line(toXY(m.n1), toXY(m.n2), stressColorCSS(m.stress, '#2563eb'), 5.5);
+            }
+
+            // Beams running across this line (cut section): small square at the joint
+            for (const m of members) {
+                if (m.type !== 'beam' || m.failed) continue;
+                const inA = onLine(m.n1), inB = onLine(m.n2);
+                if (inA === inB) continue;
+                const nd = inA ? m.n1 : m.n2;
+                const p = toXY(nd);
+                ctx.save();
+                ctx.fillStyle = stressColorCSS(m.stress, '#d97706');
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1;
+                ctx.fillRect(p.x - 4, p.y - 9, 8, 8);
+                ctx.strokeRect(p.x - 4, p.y - 9, 8, 8);
+                ctx.restore();
+            }
+
+            // Joints on in-plane beams: shear = cyan dot, rigid = purple haunch
+            connectionsMap.forEach(conn => {
+                const b = conn.beam;
+                if (b.failed || !onLine(b.n1) || !onLine(b.n2)) return;
+                const other = b.n1 === conn.node ? b.n2 : b.n1;
+                const p = toXY(conn.node), q = toXY(other);
+                const len = Math.hypot(q.x - p.x, q.y - p.y) || 1;
+                const ux = (q.x - p.x) / len, uy = (q.y - p.y) / len;
+                ctx.save();
+                if (conn.type === 'moment') {
+                    ctx.fillStyle = '#9333ea';
+                    ctx.beginPath();
+                    ctx.moveTo(p.x + ux * 4, p.y + uy * 4 - 0);
+                    ctx.lineTo(p.x + ux * 18, p.y + uy * 18);
+                    ctx.lineTo(p.x + ux * 4, p.y + uy * 4 + 10);
+                    ctx.closePath();
+                    ctx.fill();
+                } else {
+                    ctx.fillStyle = '#0891b2';
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 1.2;
+                    ctx.beginPath();
+                    ctx.arc(p.x + ux * 12, p.y + uy * 12, 3.6, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                }
+                ctx.restore();
+            });
+
+            // Undeformed outline while simulating (columns and beams in plane)
+            if (isSimulating) {
+                for (const m of members) {
+                    if ((m.type !== 'column' && m.type !== 'beam') || !onLine(m.n1) || !onLine(m.n2)) continue;
+                    line(toXY(m.n1, false), toXY(m.n2, false), 'rgba(100, 116, 139, 0.45)', 1.2, [3, 3]);
+                }
+            }
+
+            // Title
+            ctx.save();
+            ctx.fillStyle = '#334155';
+            ctx.font = '700 11px "Roboto Mono", monospace';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'alphabetic';
+            ctx.fillText(`SIDE VIEW ${sn ? 'S-N' : 'E-W'} · AXIS ${axisName(planViewMode, k)}`, x0 - sidePad * 0.7, yG + belowM * ppm + 26);
+            ctx.fillStyle = '#64748b';
+            ctx.font = '400 10px "Roboto", sans-serif';
+            ctx.fillText(sn ? 'Grid line ' + axisName('sn', k) + ', A on the left to D on the right'
+                            : 'Grid line ' + axisName('ew', k) + ', 1 on the left to 4 on the right', x0 - sidePad * 0.7, yG + belowM * ppm + 40);
+            ctx.restore();
+        }
+
         function selectPlanLevel(level, silent = false) {
             if (level < 0 || level > MAX_LEVELS) return;
             selectedPlanLevel = level;
@@ -4237,9 +4651,11 @@
                 }
             }
 
-            if (planLevelHighlightMesh) {
-                planLevelHighlightMesh.position.y = level * STORY_HEIGHT + 0.03;
+            if (planViewMode !== 'plan') {
+                planViewMode = 'plan';
+                refreshPlanButtons();
             }
+            updatePlanHighlight();
 
             if (!silent) {
                 playSound('place');
@@ -4484,6 +4900,11 @@
             // Subtle blueprint background
             planCtx.fillStyle = '#f8fafc';
             planCtx.fillRect(0, 0, w, h);
+
+            if (planViewMode !== 'plan') {
+                renderSideView(w, h);
+                return;
+            }
 
             const minDim = Math.min(w, h);
             const margin = Math.max(82, minDim * 0.24);
