@@ -39,9 +39,7 @@
         body {
             position: relative;
         }
-        @media (max-width: 640px) {
-            #credits-card { bottom: 168px !important; }
-        }
+
         /* View tools (Hide all / Pan) */
         #view-tools { bottom: 76px; }
         .vt-btn, .vt-chip {
@@ -55,9 +53,7 @@
         .vt-btn.vt-on { background: #2563eb; color: #fff; border-color: #1d4ed8; }
         .vt-run { display: none; background: #2563eb; color: #fff; box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3); }
         .vt-chip { display: none; pointer-events: none; color: #1d4ed8; background: rgba(219, 234, 254, 0.92); border-color: #93c5fd; }
-        @media (max-width: 640px) {
-            #view-tools { bottom: 124px; }
-        }
+
         /* Hide all: only the 3D model and the view tools stay */
         body.ui-hidden header,
         body.ui-hidden #plan-view-pane,
@@ -75,6 +71,19 @@
         #report-card { cursor: pointer; }
         #mobile-watermark { display: none; }
         #mobile-quake-toggle { display: none; }
+        #mobile-stats { display: none; }
+        body.mobile-mode #mobile-stats {
+            display: flex; flex-direction: column; gap: 2px;
+            position: absolute; z-index: 15; pointer-events: none;
+            top: 8px; left: max(8px, env(safe-area-inset-left, 0px));
+            padding: 6px 10px; border-radius: 12px;
+            background: rgba(255, 255, 255, 0.88); border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+            font-size: 10.5px; line-height: 1.3; color: #475569;
+        }
+        .ms-row { display: flex; justify-content: space-between; gap: 12px; }
+        .ms-v { font-family: 'Roboto Mono', monospace; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; }
+        .ms-cost { color: #047857; }
         body.mobile-mode #mobile-quake-toggle {
             display: inline-flex; align-items: center; gap: 4px; height: 36px; padding: 0 10px; border-radius: 12px;
             font-size: 11px; color: #9a3412; border-color: #fdba74; background: rgba(255, 247, 237, 0.95);
@@ -338,6 +347,13 @@
                 </div>
             </div>
 
+            <!-- Mobile mode: building figures -->
+            <aside id="mobile-stats" aria-label="Building figures">
+                <div class="ms-row"><span class="ms-k">Footprint area</span><span id="ms-footprint" class="ms-v">0 m²</span></div>
+                <div class="ms-row"><span class="ms-k">Total floor area</span><span id="ms-floor" class="ms-v">0 m²</span></div>
+                <div class="ms-row"><span class="ms-k">Total cost</span><span id="ms-cost" class="ms-v ms-cost">$0</span></div>
+            </aside>
+
             <!-- Mobile mode watermark -->
             <img id="mobile-watermark" src="assets/bue-logo.png" alt="" aria-hidden="true" onerror="this.remove()">
 
@@ -371,7 +387,7 @@
 
             <!-- Horizontal Connections, Edit & Simulation Dock (Bottom Edge inside 3D View) -->
             <div class="absolute bottom-3 left-3 right-3 z-20 flex justify-center pointer-events-none">
-                <div class="md-card pointer-events-auto rounded-2xl p-1.5 flex flex-wrap items-center justify-center gap-1.5 shadow-md max-w-full">
+                <div id="bottom-dock" class="md-card pointer-events-auto rounded-2xl p-1.5 flex flex-wrap items-center justify-center gap-1.5 shadow-md max-w-full">
                     <!-- Beam-to-Column Connection Tool (Shear $5 vs Rigid Moment $10) -->
                     <button id="tool-connection" onclick="selectTool('connection')" class="md-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700" title="Click any beam-column joint to toggle Simple Shear ($5) vs Rigid Moment ($10) (5)">
                         <span class="material-symbols-outlined text-lg text-purple-600">hub</span>
@@ -771,14 +787,17 @@
             const groundMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.9, metalness: 0.05 });
             const ground = new THREE.Mesh(groundGeo, groundMat);
             ground.rotation.x = -Math.PI / 2;
-            ground.position.y = -0.05;
+            ground.position.y = -1.32; // excavated level: footings below the slab stay visible
             ground.receiveShadow = true;
             environmentGroup.add(ground);
 
             // Concrete foundation mat under the 4x4 grid (3D only, no structural axes in 3D)
             const padWidth = (GRID_SIZE - 1) * BAY_WIDTH + 3.2;
             const padGeo = new THREE.BoxGeometry(padWidth, 0.3, padWidth);
-            const padMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 });
+            // Slab-on-grade, see-through so the pedestals and isolated footings below it can be seen
+            const padMat = new THREE.MeshStandardMaterial({
+                color: 0xffffff, roughness: 0.7, transparent: true, opacity: 0.5, depthWrite: false
+            });
             const padMesh = new THREE.Mesh(padGeo, padMat);
             padMesh.position.y = -0.15;
             padMesh.receiveShadow = true;
@@ -1372,11 +1391,11 @@
 
         /***********************************************************************
          * AUTOMATIC PAD FOOTINGS under every ground-floor column
-         * 1.6 x 1.6 m reinforced concrete pad, 25 mm grout, 30 mm steel base plate
+         * 1.6 x 1.6 x 0.45 m isolated pad footing, 0.6 x 0.6 m pedestal, 25 mm grout, 30 mm steel base plate
          * and 4 anchor bolts with nuts. Added and removed with the columns.
          ***********************************************************************/
         const footingsMap = new Map(); // ground node key -> footing group
-        const FOOTING = { size: 1.6, depth: 0.36, plate: 0.5, plateT: 0.03, grout: 0.025 };
+        const FOOTING = { size: 1.6, depth: 0.45, ped: 0.6, pedH: 0.85, plate: 0.5, plateT: 0.03, grout: 0.025 };
         const footingConcreteMat = new THREE.MeshStandardMaterial({ color: 0xa8adb3, roughness: 0.85, metalness: 0.02 });
         const footingGroutMat = new THREE.MeshStandardMaterial({ color: 0x8b9096, roughness: 0.9, metalness: 0.0 });
         const footingPlateMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.4, metalness: 0.75 });
@@ -1385,23 +1404,32 @@
             const g = new THREE.Group();
             const plateTop = 0.085;                    // matches the brace gusset seat at the base
             const plateBot = plateTop - FOOTING.plateT;
-            const padTop = plateBot - FOOTING.grout;
+            const pedTop = plateBot - FOOTING.grout;  // top of the concrete pedestal (just above the slab)
+            const padTop = pedTop - FOOTING.pedH;     // top of the isolated footing
 
+            // Isolated (pad) footing
             const pad = new THREE.Mesh(SHARED_GEO.unitBox, footingConcreteMat);
             pad.scale.set(FOOTING.size, FOOTING.depth, FOOTING.size);
             pad.position.y = padTop - FOOTING.depth / 2;
             pad.castShadow = true;
             pad.receiveShadow = true;
 
+            // Pedestal (short concrete column) carrying the base plate
+            const ped = new THREE.Mesh(SHARED_GEO.unitBox, footingConcreteMat);
+            ped.scale.set(FOOTING.ped, FOOTING.pedH, FOOTING.ped);
+            ped.position.y = pedTop - FOOTING.pedH / 2;
+            ped.castShadow = true;
+            ped.receiveShadow = true;
+
             const grout = new THREE.Mesh(SHARED_GEO.unitBox, footingGroutMat);
-            grout.scale.set(FOOTING.plate + 0.08, FOOTING.grout, FOOTING.plate + 0.08);
-            grout.position.y = padTop + FOOTING.grout / 2;
+            grout.scale.set(FOOTING.plate + 0.06, FOOTING.grout, FOOTING.plate + 0.06);
+            grout.position.y = pedTop + FOOTING.grout / 2;
 
             const plate = new THREE.Mesh(SHARED_GEO.unitBox, footingPlateMat);
             plate.scale.set(FOOTING.plate, FOOTING.plateT, FOOTING.plate);
             plate.position.y = plateBot + FOOTING.plateT / 2;
             plate.castShadow = true;
-            g.add(pad, grout, plate);
+            g.add(pad, ped, grout, plate);
 
             for (const sx of [-1, 1]) {
                 for (const sz of [-1, 1]) {
@@ -1597,6 +1625,29 @@
             if (costEl) {
                 costEl.textContent = `$${totalCost.toLocaleString()}`;
             }
+
+            // Building figures (Mobile mode card): footprint = plan bays covered by a slab on any level,
+            // or enclosed by four ground-floor columns; total floor area = all Floor Area slabs
+            const bayArea = BAY_WIDTH * BAY_WIDTH;
+            const cells = new Set();
+            const groundCols = new Set();
+            for (let i = 0; i < members.length; i++) {
+                const m = members[i];
+                if (m.type === 'floor') cells.add(`${Math.min(m.n1.gx, m.n3.gx)},${Math.min(m.n1.gz, m.n3.gz)}`);
+                else if (m.type === 'column' && Math.min(m.n1.gy, m.n2.gy) === 0) groundCols.add(`${m.n1.gx},${m.n1.gz}`);
+            }
+            for (let gx = 0; gx < GRID_SIZE - 1; gx++) {
+                for (let gz = 0; gz < GRID_SIZE - 1; gz++) {
+                    if ([[0, 0], [1, 0], [0, 1], [1, 1]].every(([a, b]) => groundCols.has(`${gx + a},${gz + b}`))) cells.add(`${gx},${gz}`);
+                }
+            }
+            const fmtArea = a => `${a.toLocaleString()} m²`;
+            const fpEl = document.getElementById('ms-footprint');
+            if (fpEl) fpEl.textContent = fmtArea(cells.size * bayArea);
+            const flEl = document.getElementById('ms-floor');
+            if (flEl) flEl.textContent = fmtArea(counts.floor * bayArea);
+            const mcEl = document.getElementById('ms-cost');
+            if (mcEl) mcEl.textContent = `$${totalCost.toLocaleString()}`;
 
             // Compute real structural steel tonnage for BIM / Revit takeoff
             // Column (W340x108 kg/m * 3.5m), Beam (W320x74 kg/m * 4.0m), Brace (HSS180x42 kg/m * 5.31m)
@@ -4198,7 +4249,23 @@
             render2DPlan();
         }
 
+        // Keep "Hide all / Mobile" and the credits card just above the bottom dock (it wraps on narrow screens)
+        function placeAboveDock() {
+            const dock = document.getElementById('bottom-dock');
+            const vt = document.getElementById('view-tools');
+            const cc = document.getElementById('credits-card');
+            if (!dock || !vt) return;
+            const dockH = dock.getBoundingClientRect().height || 56;
+            const base = Math.round(dockH + 12 + 10); // dock bottom offset 12px + 10px gap
+            vt.style.bottom = `${base}px`;
+            if (cc) {
+                const narrow = container.clientWidth < 640;
+                cc.style.bottom = `${narrow ? base + 46 : base}px`;
+            }
+        }
+
         function resizeViewports() {
+            placeAboveDock();
             // Resize 3D Renderer
             const w3d = container.clientWidth;
             const h3d = container.clientHeight;
@@ -4732,6 +4799,10 @@
                             planCtx.rect(pt.x - half, pt.y - half, half * 2, half * 2);
                             planCtx.fill();
                             planCtx.stroke();
+                            const ph = (FOOTING.ped / 2) / BAY_WIDTH * bayPx;
+                            planCtx.beginPath();
+                            planCtx.rect(pt.x - ph, pt.y - ph, ph * 2, ph * 2);
+                            planCtx.stroke();
                             planCtx.restore();
                         }
                         planCtx.fillStyle = '#e2e8f0';
@@ -4836,6 +4907,9 @@
         window.onload = function () {
             initGridAndCandidates();
             updateWindLabels();
+            try {
+                if (window.ResizeObserver) new ResizeObserver(placeAboveDock).observe(document.getElementById('bottom-dock'));
+            } catch (e) { /* placement still updates on window resize */ }
             resizeViewports();
             updateCostAndCountsUI();
             updateGhostPreview();
