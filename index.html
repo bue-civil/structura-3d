@@ -1045,10 +1045,11 @@
         const SHARED_GEO = {
             floorSlab: new THREE.BoxGeometry(BAY_WIDTH - 0.26, 0.14, BAY_WIDTH - 0.26),
             floorRib: new THREE.BoxGeometry(BAY_WIDTH - 0.36, 0.16, 0.06),
-            colWeb: new THREE.BoxGeometry(0.045, 1.0, 0.34 - 2 * 0.055),
-            colFlange: new THREE.BoxGeometry(0.34, 1.0, 0.055),
-            beamWeb: new THREE.BoxGeometry(0.045, 1.0, 0.32 - 2 * 0.055),
-            beamFlange: new THREE.BoxGeometry(0.28, 1.0, 0.055),
+            // 16 segments along the length so the deflected shape can be drawn as a smooth curve
+            colWeb: new THREE.BoxGeometry(0.045, 1.0, 0.34 - 2 * 0.055, 1, 16, 1),
+            colFlange: new THREE.BoxGeometry(0.34, 1.0, 0.055, 1, 16, 1),
+            beamWeb: new THREE.BoxGeometry(0.045, 1.0, 0.32 - 2 * 0.055, 1, 16, 1),
+            beamFlange: new THREE.BoxGeometry(0.28, 1.0, 0.055, 1, 16, 1),
             braceTube: new THREE.CylinderGeometry(0.09, 0.09, 1.0, 8),
             // Realistic Tapered Steel Beam Haunch Geometries (Local +Z points along beam from column center)
             haunchEndPlate: new THREE.BoxGeometry(0.30, 0.64, 0.036),
@@ -1276,6 +1277,13 @@
                     webMesh.castShadow = true;
                     f1Mesh.castShadow = true;
                     f2Mesh.castShadow = true;
+                    // Own copy of the geometry so this member can bend independently during a test
+                    for (const part of [webMesh, f1Mesh, f2Mesh]) {
+                        part.geometry = part.geometry.clone();
+                        part.userData.ownGeometry = true;
+                        part.userData.origPos = Float32Array.from(part.geometry.attributes.position.array);
+                    }
+                    group.userData.bendParts = [webMesh, f1Mesh, f2Mesh];
                 }
                 group.add(webMesh, f1Mesh, f2Mesh);
             } else {
@@ -1511,6 +1519,7 @@
 
         function syncConnections() {
             syncFootings();
+            updateFloorJoins();
             // 1. Remove any connections whose beam or supporting column at that node no longer exists
             for (const [key, conn] of connectionsMap.entries()) {
                 const beamStillExists = members.includes(conn.beam);
@@ -1820,6 +1829,85 @@
             };
         }
 
+        /***********************************************************************
+         * CONTINUOUS FLOOR AREAS: two (or more) bays with no beam and no column on the
+         * line between them, framed by the same continuous beams, form ONE floor area.
+         * Placing one fills them all, the slab is drawn without a gap, deleting one
+         * removes the whole area. Each bay still counts as one Floor Area in cost/weight.
+         ***********************************************************************/
+        function floorSlotAt(gx, gy, gz) {
+            if (gx < 0 || gz < 0 || gx > GRID_SIZE - 2 || gz > GRID_SIZE - 2) return null;
+            return findCandidateSlot('floor', gx, gy, gz);
+        }
+
+        // Neighbouring bays of a floor cell and the shared edge between them
+        function floorNeighbours(gx, gy, gz) {
+            const N = (x, z) => nodesMap.get(nodeKey(x, gy, z));
+            return [
+                { dx: 1, dz: 0, edge: [N(gx + 1, gz), N(gx + 1, gz + 1)], span: 'hasParallelX' },
+                { dx: -1, dz: 0, edge: [N(gx, gz), N(gx, gz + 1)], span: 'hasParallelX' },
+                { dx: 0, dz: 1, edge: [N(gx, gz + 1), N(gx + 1, gz + 1)], span: 'hasParallelZ' },
+                { dx: 0, dz: -1, edge: [N(gx, gz), N(gx + 1, gz)], span: 'hasParallelZ' }
+            ].map(o => Object.assign(o, { slot: floorSlotAt(gx + o.dx, gy, gz + o.dz) }))
+             .filter(o => o.slot && o.edge[0] && o.edge[1]);
+        }
+
+        // Two bays are one continuous floor area when the line between them has no beam and no
+        // column, and both bays span the same way (onto the same continuous beams)
+        function floorBaysJoin(slotA, nb) {
+            if (findBeamBetween(nb.edge[0], nb.edge[1])) return false;
+            if (nodeHasColumn(nb.edge[0]) || nodeHasColumn(nb.edge[1])) return false;
+            return checkParallelBeamsForFloor(slotA)[nb.span] && checkParallelBeamsForFloor(nb.slot)[nb.span];
+        }
+
+        function floorAreaGroup(startSlot, wantPlaced) {
+            const out = [startSlot];
+            const seen = new Set([startSlot.slotKey]);
+            for (let i = 0; i < out.length; i++) {
+                const sl = out[i];
+                for (const nb of floorNeighbours(sl.gx, sl.gy, sl.gz)) {
+                    if (seen.has(nb.slot.slotKey)) continue;
+                    if (isSlotOccupied(nb.slot) !== wantPlaced) continue;
+                    if (!floorBaysJoin(sl, nb)) continue;
+                    seen.add(nb.slot.slotKey);
+                    out.push(nb.slot);
+                }
+            }
+            return out;
+        }
+
+        // Slab edges: pulled back from beams, but run right up to a neighbouring slab where no beam separates them
+        function updateFloorJoins() {
+            const SPAN = BAY_WIDTH - 0.26, RIB = BAY_WIDTH - 0.36, GAP = 0.13;
+            const floorAt = new Map();
+            for (const m of members) if (m.type === 'floor') floorAt.set(`${m.gx},${m.gy},${m.gz}`, m);
+            for (const m of members) {
+                if (m.type !== 'floor') continue;
+                const ext = { e: 0, w: 0, s: 0, n: 0 };
+                const nbs = floorNeighbours(m.gx, m.gy, m.gz);
+                for (const nb of nbs) {
+                    const other = floorAt.get(`${m.gx + nb.dx},${m.gy},${m.gz + nb.dz}`);
+                    if (!other || findBeamBetween(nb.edge[0], nb.edge[1])) continue;
+                    if (nb.dx === 1) ext.e = GAP;
+                    if (nb.dx === -1) ext.w = GAP;
+                    if (nb.dz === 1) ext.s = GAP;
+                    if (nb.dz === -1) ext.n = GAP;
+                }
+                m.joins = { e: ext.e > 0, w: ext.w > 0, s: ext.s > 0, n: ext.n > 0 };
+                const children = m.mesh.children;
+                const slab = children[0];
+                if (slab) {
+                    slab.scale.set((SPAN + ext.e + ext.w) / SPAN, 1, (SPAN + ext.s + ext.n) / SPAN);
+                    slab.position.x = (ext.e - ext.w) / 2;
+                    slab.position.z = (ext.s - ext.n) / 2;
+                }
+                for (let i = 1; i < children.length; i++) {
+                    children[i].scale.x = (RIB + ext.e + ext.w + (ext.e ? 0.05 : 0) + (ext.w ? 0.05 : 0)) / RIB;
+                    children[i].position.x = (ext.e - ext.w) / 2;
+                }
+            }
+        }
+
         function isSlotOccupied(slot) {
             return occupiedSlotSet.has(slot.slotKey);
         }
@@ -1879,6 +1967,19 @@
             occupiedSlotSet.add(slot.slotKey);
             syncConnections();
 
+            if (!silent && slot.type === 'floor') {
+                // One tap fills the whole continuous area between the same beams
+                const extra = floorAreaGroup(slot, false).slice(1);
+                let added = 0;
+                for (const sl of extra) if (placeMember(sl, true)) added++;
+                if (added > 0) {
+                    playSound('place');
+                    const bays = added + 1;
+                    showStatusMessage(`Added one continuous floor area over ${bays} bays (${bays * BAY_WIDTH * BAY_WIDTH} m², +$${bays * UNIT_PRICES.floor}). No beam or column splits it, so it works as one slab.`);
+                    return true;
+                }
+            }
+
             if (!silent) {
                 playSound('place');
                 const price = UNIT_PRICES[slot.type];
@@ -1892,13 +1993,85 @@
             return true;
         }
 
+        function disposeMemberMesh(mesh) {
+            if (mesh.userData.primaryMaterial) mesh.userData.primaryMaterial.dispose();
+            mesh.traverse(c => { if (c.isMesh && c.userData.ownGeometry) c.geometry.dispose(); });
+        }
+
+        /***********************************************************************
+         * SMOOTH BENDING: draw beams and columns as cubic (Hermite) curves between
+         * their deformed end points, using the end rotations from the 3D analysis.
+         * Beams spliced without a column share the same joint rotation, so they
+         * deflect as one continuous beam instead of kinking at the splice.
+         ***********************************************************************/
+        const _bendX = new THREE.Vector3();
+        const _bendZ = new THREE.Vector3();
+        const _bendE = new THREE.Vector3();
+        const _bendT1 = new THREE.Vector3();
+        const _bendT2 = new THREE.Vector3();
+
+        function resetMemberBend(m) {
+            const parts = m.mesh.userData.bendParts;
+            if (!parts || !m.mesh.userData.bent) return;
+            for (const part of parts) {
+                const pos = part.geometry.attributes.position;
+                pos.array.set(part.userData.origPos);
+                pos.needsUpdate = true;
+            }
+            m.mesh.userData.bent = false;
+        }
+
+        function bendMemberMesh(m, s) {
+            const parts = m.mesh.userData.bendParts;
+            if (!parts) return;
+            if (m.failed || !m.n1.rotVec || !m.n2.rotVec || !s) { resetMemberBend(m); return; }
+            const q = m.mesh.quaternion;
+            const L = m.n1.simPos.distanceTo(m.n2.simPos);
+            _bendX.set(1, 0, 0).applyQuaternion(q);
+            _bendZ.set(0, 0, 1).applyQuaternion(q);
+            _bendE.subVectors(m.n2.restPos, m.n1.restPos).normalize();
+            _bendT1.crossVectors(m.n1.rotVec, _bendE).multiplyScalar(s).add(_bendE);
+            _bendT2.crossVectors(m.n2.rotVec, _bendE).multiplyScalar(s).add(_bendE);
+            const clamp = v => Math.max(-0.5, Math.min(0.5, v));
+            const ax1 = clamp(_bendT1.dot(_bendX)), az1 = clamp(_bendT1.dot(_bendZ));
+            const ax2 = clamp(_bendT2.dot(_bendX)), az2 = clamp(_bendT2.dot(_bendZ));
+            for (const part of parts) {
+                const orig = part.userData.origPos;
+                const pos = part.geometry.attributes.position;
+                const arr = pos.array;
+                for (let i = 0; i < arr.length; i += 3) {
+                    const xi = orig[i + 1] + 0.5;           // 0 at end 1, 1 at end 2
+                    const h1 = xi * (1 - xi) * (1 - xi);    // Hermite shape for the slope at end 1
+                    const h2 = xi * xi * (xi - 1);          // Hermite shape for the slope at end 2
+                    arr[i] = orig[i] + L * (ax1 * h1 + ax2 * h2);
+                    arr[i + 2] = orig[i + 2] + L * (az1 * h1 + az2 * h2);
+                }
+                pos.needsUpdate = true;
+                part.frustumCulled = false;
+            }
+            m.mesh.userData.bent = true;
+        }
+
         function removeMember(memberObj, silent = false) {
             const idx = members.indexOf(memberObj);
             if (idx === -1) return;
+            if (!silent && memberObj.type === 'floor') {
+                // A continuous floor area is removed as a whole
+                const startSlot = floorSlotAt(memberObj.gx, memberObj.gy, memberObj.gz);
+                const groupSlots = startSlot ? floorAreaGroup(startSlot, true) : [];
+                if (groupSlots.length > 1) {
+                    const keys = new Set(groupSlots.map(sl => sl.slotKey));
+                    const toRemove = members.filter(m => m.type === 'floor' && keys.has(m.slotKey));
+                    toRemove.forEach(m => removeMember(m, true));
+                    playSound('delete');
+                    showStatusMessage(`Removed the continuous floor area (${toRemove.length} bays, -$${toRemove.length * UNIT_PRICES.floor}).`);
+                    return;
+                }
+            }
             members.splice(idx, 1);
             occupiedSlotSet.delete(memberObj.slotKey);
             membersGroup.remove(memberObj.mesh);
-            memberObj.mesh.userData.primaryMaterial.dispose();
+            disposeMemberMesh(memberObj.mesh);
 
             // If a beam was removed, verify that all placed floor slabs still have at least 2 parallel beams
             let autoRemovedFloors = 0;
@@ -1912,7 +2085,7 @@
                             members.splice(fIdx, 1);
                             occupiedSlotSet.delete(fl.slotKey);
                             membersGroup.remove(fl.mesh);
-                            fl.mesh.userData.primaryMaterial.dispose();
+                            disposeMemberMesh(fl.mesh);
                             autoRemovedFloors++;
                         }
                     }
@@ -2869,6 +3042,7 @@
                 node.vel.set(0, 0, 0);
                 node.falling = false;
                 node.dispVec = null;
+                node.rotVec = null;
             });
             members.forEach(m => {
                 m.stress = 0;
@@ -3028,6 +3202,7 @@
                 const node = nodesMap.get(key);
                 if (!node || node.falling || res.unstableNodes.has(key)) return;
                 node.dispVec = new THREE.Vector3(v[0], v[1], v[2]);
+                node.rotVec = new THREE.Vector3(v[3], v[4], v[5]);
                 maxT = Math.max(maxT, Math.hypot(v[0], v[1], v[2]));
                 maxHoriz = Math.max(maxHoriz, Math.hypot(v[0], v[2]));
             });
@@ -3240,6 +3415,7 @@
                     if (m.type === 'floor') alignFloorMesh(m.mesh, m.corners, true);
                     else alignMemberMesh(m, true);
                 } else if (m.failed) {
+                    if (m.mesh.userData.bent) resetMemberBend(m);
                     // Dynamic plastic buckling / collapse trajectory
                     m.collapseVel.y -= 16.5 * dt;
                     const push = quake ? 2 + 2 * quakeLevel : windLevel;
@@ -3260,6 +3436,7 @@
                     alignFloorMesh(m.mesh, m.corners, true);
                 } else {
                     alignMemberMesh(m, true);
+                    bendMemberMesh(m, deformScale * gust);
                 }
             }
 
@@ -3364,7 +3541,8 @@
                 g.mesh.userData.primaryMaterial.color.copy(g.mesh.userData.baseColor);
                 positionGussetMesh(g, false);
             });
-            nodesMap.forEach(node => { node.falling = false; node.dispVec = null; });
+            nodesMap.forEach(node => { node.falling = false; node.dispVec = null; node.rotVec = null; });
+            members.forEach(resetMemberBend);
             analysisResult = null;
             const deformBadge = document.getElementById('deform-badge');
             if (deformBadge) { deformBadge.classList.add('hidden'); deformBadge.classList.remove('flex'); }
@@ -3445,7 +3623,7 @@
             while (members.length > 0) {
                 const m = members.pop();
                 membersGroup.remove(m.mesh);
-                m.mesh.userData.primaryMaterial.dispose();
+                disposeMemberMesh(m.mesh);
             }
             occupiedSlotSet.clear();
             memberRaycastTargets.length = 0;
@@ -5050,14 +5228,28 @@
                 planCtx.strokeStyle = '#4f46e5';
                 planCtx.lineWidth = 1.5;
 
+                // Joined sides of a continuous floor area run flush with no outline
+                const jn = m.joins || {};
+                const iw = jn.w ? 0 : 5, ie = jn.e ? 0 : 5, inn = jn.n ? 0 : 5, is = jn.s ? 0 : 5;
+                const c0 = { x: p0.x + iw, y: p0.y + inn };
+                const c1 = { x: p1.x - ie, y: p1.y + inn };
+                const c2 = { x: p2.x - ie, y: p2.y - is };
+                const c3 = { x: p3.x + iw, y: p3.y - is };
                 planCtx.beginPath();
-                planCtx.moveTo(p0.x + 5, p0.y + 5);
-                planCtx.lineTo(p1.x - 5, p1.y + 5);
-                planCtx.lineTo(p2.x - 5, p2.y - 5);
-                planCtx.lineTo(p3.x + 5, p3.y - 5);
+                planCtx.moveTo(c0.x, c0.y);
+                planCtx.lineTo(c1.x, c1.y);
+                planCtx.lineTo(c2.x, c2.y);
+                planCtx.lineTo(c3.x, c3.y);
                 planCtx.closePath();
                 planCtx.fill();
-                planCtx.stroke();
+                const sides = [[c0, c1, jn.n], [c1, c2, jn.e], [c2, c3, jn.s], [c3, c0, jn.w]];
+                for (const [a, b, joined] of sides) {
+                    if (joined) continue;
+                    planCtx.beginPath();
+                    planCtx.moveTo(a.x, a.y);
+                    planCtx.lineTo(b.x, b.y);
+                    planCtx.stroke();
+                }
 
                 // Decking ribs symbol
                 planCtx.strokeStyle = 'rgba(67, 56, 202, 0.35)';

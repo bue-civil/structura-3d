@@ -6,6 +6,7 @@ An interactive 3D steel frame builder and stability simulator for school student
 
 ## Features
 - **Build in 3D** on a 4 × 4 grid (4 m bays), up to 4 storeys (3.5 m). A read-only 2D floor plan follows each level.
+- **Continuous beams and floors:** beams that meet without a column act as one continuous beam (each piece still counts as a beam in cost and steel mass), and beams and columns are drawn bending smoothly using the end rotations from the analysis. A floor placed between two continuous beams with no beam or column across the middle fills the whole area in one tap, is drawn as one slab with no gap, and is deleted as one.
 - **Footings:** every ground-floor column automatically sits on a 0.6 × 0.6 m concrete pedestal over a 1.6 × 1.6 × 0.45 m isolated pad footing, with grout, a steel base plate and four anchor bolts. The ground-floor slab is see-through so the footings can be seen below it (dashed on the ground floor plan, included in the STL export).
 - **Connections:** beam-to-column joints are realistic fin-plate shear connections ($5) or rigid moment connections ($10); click a joint with the Joint tool to toggle it. Every brace gets bolted gusset plates at both ends automatically.
 - **Real 3D frame analysis:** direct stiffness method with 6 degrees of freedom per joint. Pinned base plates, pinned or rigid beam ends, pin-ended braces, and floor slabs acting as rigid diaphragms.
