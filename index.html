@@ -1831,7 +1831,11 @@
             const b1 = P(corners[0]), b2 = P(corners[1]), t2 = P(corners[2]), t1 = P(corners[3]);
             const L = corners[0].restPos.distanceTo(corners[1].restPos) || 1;
             const a = 0.17 / L;
-            const topCut = 0.32 / STORY_HEIGHT;
+            // Beams are centred on the floor line (depth 0.32 m): the wall runs from the top of the beam
+            // below (or the slab at ground level) to the underside of the beam above
+            const halfBeam = 0.16;
+            const botCut = corners[0].gy > 0 ? halfBeam / STORY_HEIGHT : 0;
+            const topCut = halfBeam / STORY_HEIGHT;
             const tw = STRUCT.wall.t;
             _wallU.subVectors(corners[1].restPos, corners[0].restPos).normalize();
             const nx = -_wallU.z, nz = _wallU.x;
@@ -1844,7 +1848,7 @@
             const arr = pos.array;
             for (let i = 0; i < arr.length; i += 3) {
                 const sx = a + (orig[i] + 0.5) * (1 - 2 * a);
-                const ty = (orig[i + 1] + 0.5) * (1 - topCut);
+                const ty = botCut + (orig[i + 1] + 0.5) * (1 - topCut - botCut);
                 const w = orig[i + 2] * tw;
                 const bx = b1.x + (b2.x - b1.x) * sx, by = b1.y + (b2.y - b1.y) * sx, bz = b1.z + (b2.z - b1.z) * sx;
                 const tx = t1.x + (t2.x - t1.x) * sx, tyy = t1.y + (t2.y - t1.y) * sx, tz = t1.z + (t2.z - t1.z) * sx;
@@ -4722,8 +4726,9 @@
                     const a = toBimVec(m.n1.restPos), b = toBimVec(m.n2.restPos);
                     const wl = Math.hypot(b.x - a.x, b.y - a.y) || 1;
                     const wx = (b.x - a.x) / wl, wy = (b.y - a.y) / wl;
-                    const wallLen = wl - 0.34, wallH = STORY_HEIGHT - 0.32;
-                    const wPt = addEntity(`IFCCARTESIANPOINT((${fmtIfcNum(bp.x)},${fmtIfcNum(bp.y)},${fmtIfcNum(bp.z - elev)}))`);
+                    const wBase = m.n1.gy > 0 ? 0.16 : 0;
+                    const wallLen = wl - 0.34, wallH = STORY_HEIGHT - 0.16 - wBase;
+                    const wPt = addEntity(`IFCCARTESIANPOINT((${fmtIfcNum(bp.x)},${fmtIfcNum(bp.y)},${fmtIfcNum(bp.z - elev + wBase)}))`);
                     const wDir = addEntity(`IFCDIRECTION((${fmtIfcNum(wx)},${fmtIfcNum(wy)},0.))`);
                     const wAxis = addEntity(`IFCAXIS2PLACEMENT3D(${wPt},${dirZ},${wDir})`);
                     const wPlace = addEntity(`IFCLOCALPLACEMENT(${storeyPlacements[lvl]},${wAxis})`);
@@ -5097,21 +5102,22 @@
             for (const m of members) {
                 if (m.type !== 'wall' || m.failed || !m.corners.every(onLine)) continue;
                 const [b1, b2, t2, t1] = m.corners.map(c => toXY(c));
-                const inset = 0.17 * ppm, top = 0.32 * ppm;
+                const inset = 0.17 * ppm, top = 0.16 * ppm, bot = m.n1.gy > 0 ? 0.16 * ppm : 0;
                 const lerp = (a, b, f) => ({ x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f });
                 const L = Math.hypot(b2.x - b1.x, b2.y - b1.y) || 1;
                 const f = inset / L;
                 const q1 = lerp(b1, b2, f), q2 = lerp(b1, b2, 1 - f);
                 const r1 = lerp(t1, t2, f), r2 = lerp(t1, t2, 1 - f);
                 const Hh = Math.hypot(r1.x - q1.x, r1.y - q1.y) || 1;
-                const g = 1 - top / Hh;
+                const g = 1 - top / Hh, g0 = bot / Hh;
                 const s1 = lerp(q1, r1, g), s2 = lerp(q2, r2, g);
+                const u1 = lerp(q1, r1, g0), u2 = lerp(q2, r2, g0);
                 ctx.save();
                 ctx.fillStyle = stressColorCSS(m.stress, '#d1d5db');
                 ctx.strokeStyle = '#475569';
                 ctx.lineWidth = 1.2;
                 ctx.beginPath();
-                ctx.moveTo(q1.x, q1.y); ctx.lineTo(q2.x, q2.y); ctx.lineTo(s2.x, s2.y); ctx.lineTo(s1.x, s1.y);
+                ctx.moveTo(u1.x, u1.y); ctx.lineTo(u2.x, u2.y); ctx.lineTo(s2.x, s2.y); ctx.lineTo(s1.x, s1.y);
                 ctx.closePath();
                 ctx.fill();
                 ctx.stroke();
