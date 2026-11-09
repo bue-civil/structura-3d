@@ -113,12 +113,14 @@
         body.mobile-mode #mobile-bar {
             display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
             gap: 3px; justify-content: space-between;
+            overflow-x: auto; scrollbar-width: none;
             padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
             background: rgba(255, 255, 255, 0.96); border-top: 1px solid #e2e8f0;
             box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.08);
         }
+        body.mobile-mode #mobile-bar::-webkit-scrollbar { display: none; }
         .mb-btn {
-            flex: 1 1 0; min-width: 0; height: 52px; border-radius: 12px; border: 1px solid #e2e8f0; background: #fff;
+            flex: 1 0 46px; min-width: 46px; height: 52px; border-radius: 12px; border: 1px solid #e2e8f0; background: #fff;
             display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
             font: 600 10.5px 'Roboto', sans-serif; color: #334155;
             touch-action: manipulation; -webkit-tap-highlight-color: transparent;
@@ -126,10 +128,10 @@
         .mb-btn .material-symbols-outlined { font-size: 22px; }
         .mb-btn:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
         .mb-btn:active { transform: scale(0.96); }
-        .mb-ic-col { color: #2563eb; } .mb-ic-beam { color: #d97706; } .mb-ic-brace { color: #059669; } .mb-ic-floor { color: #4f46e5; } .mb-ic-joint { color: #9333ea; } .mb-ic-del { color: #e11d48; }
+        .mb-ic-col { color: #2563eb; } .mb-ic-beam { color: #d97706; } .mb-ic-brace { color: #059669; } .mb-ic-floor { color: #4f46e5; } .mb-ic-joint { color: #9333ea; } .mb-ic-lbrace { color: #0f766e; } .mb-ic-wall { color: #64748b; } .mb-ic-del { color: #e11d48; }
         .mb-btn.mb-active { background: #dbeafe; border-color: #2563eb; color: #1d4ed8; box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2); }
         .mb-run { background: #2563eb; border-color: #1d4ed8; color: #fff; flex-grow: 1.2; }
-        .mb-exit { flex: 0 0 44px; color: #64748b; }
+        .mb-exit { flex: 0 0 44px; min-width: 44px; color: #64748b; }
         @media (max-width: 380px) { .mb-btn { font-size: 9.5px; } .mb-btn .material-symbols-outlined { font-size: 20px; } }
         body.mobile-mode header,
         body.mobile-mode #plan-viewonly-chip,
@@ -280,6 +282,8 @@
                     <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-blue-600 inline-block"></span> Column</span>
                     <span class="flex items-center gap-1"><span class="w-3 h-1 bg-amber-600 inline-block"></span> Beam</span>
                     <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-emerald-600 inline-block"></span> Brace</span>
+                    <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-teal-700 inline-block"></span> Long brace</span>
+                    <span class="flex items-center gap-1"><span class="w-3 h-1.5 bg-slate-300 border border-slate-600 inline-block"></span> Shear wall</span>
                     <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-indigo-500/40 border border-indigo-600 inline-block"></span> Floor Area</span>
                     <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-cyan-600 inline-block"></span> Shear / Gusset ($5)</span>
                     <span class="flex items-center gap-1"><span class="w-2 h-2 bg-purple-600 inline-block"></span> Rigid ($10)</span>
@@ -357,6 +361,30 @@
                             </div>
                         </div>
                         <span id="count-floor" class="px-1.5 py-0.5 text-[10px] font-mono-code font-bold rounded-full bg-indigo-100 text-indigo-800" title="Placed Floor Slabs">0</span>
+                    </button>
+
+                    <!-- Long Brace Tool ($45): across two bays between columns 8 m apart -->
+                    <button id="tool-longbrace" onclick="selectTool('longbrace')" class="md-btn flex items-center justify-between px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 w-full" title="Long brace: spans two bays (8 m) between two columns with no column in the middle">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-lg text-teal-700">trending_up</span>
+                            <div class="text-left">
+                                <div class="text-[11px] font-bold leading-tight">Long Brace</div>
+                                <div class="text-[9px] text-teal-700 font-mono-code font-semibold">$45+2×$5 <span class="text-slate-400">(7)</span></div>
+                            </div>
+                        </div>
+                        <span id="count-longbrace" class="px-1.5 py-0.5 text-[10px] font-mono-code font-bold rounded-full bg-teal-100 text-teal-800" title="Placed Long Braces">0</span>
+                    </button>
+
+                    <!-- Shear Wall Tool ($150): reinforced concrete panel between two columns -->
+                    <button id="tool-wall" onclick="selectTool('wall')" class="md-btn flex items-center justify-between px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 w-full" title="Shear wall: 200 mm reinforced concrete panel between two columns">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-lg text-slate-500">view_agenda</span>
+                            <div class="text-left">
+                                <div class="text-[11px] font-bold leading-tight">Shear Wall</div>
+                                <div class="text-[9px] text-slate-500 font-mono-code font-semibold">$150 <span class="text-slate-400">(8)</span></div>
+                            </div>
+                        </div>
+                        <span id="count-wall" class="px-1.5 py-0.5 text-[10px] font-mono-code font-bold rounded-full bg-slate-200 text-slate-700" title="Placed Shear Walls">0</span>
                     </button>
                 </div>
             </div>
@@ -492,6 +520,8 @@
         <button class="mb-btn" data-tool="beam" onclick="selectTool('beam')"><span class="material-symbols-outlined mb-ic-beam">horizontal_rule</span><span>Beam</span></button>
         <button class="mb-btn" data-tool="brace" onclick="selectTool('brace')"><span class="material-symbols-outlined mb-ic-brace">close</span><span>Brace</span></button>
         <button class="mb-btn" data-tool="floor" onclick="selectTool('floor')"><span class="material-symbols-outlined mb-ic-floor">grid_on</span><span>Floor</span></button>
+        <button class="mb-btn" data-tool="longbrace" onclick="selectTool('longbrace')" title="Long brace across two bays"><span class="material-symbols-outlined mb-ic-lbrace">trending_up</span><span>Long br.</span></button>
+        <button class="mb-btn" data-tool="wall" onclick="selectTool('wall')" title="Shear wall between two columns"><span class="material-symbols-outlined mb-ic-wall">view_agenda</span><span>Wall</span></button>
         <button class="mb-btn" data-tool="connection" onclick="selectTool('connection')" title="Tap a joint to switch Shear / Rigid"><span class="material-symbols-outlined mb-ic-joint">hub</span><span>Joint</span></button>
         <button class="mb-btn" data-tool="delete" onclick="selectTool('delete')" title="Tap a member to remove it (or long-press any member)"><span class="material-symbols-outlined mb-ic-del">delete</span><span>Delete</span></button>
         <button id="mb-run" class="mb-btn mb-run" onclick="runFromViewTools()"><span class="material-symbols-outlined">play_arrow</span><span class="mb-run-label">Run</span></button>
@@ -601,6 +631,8 @@
             beam: 50,
             brace: 25,
             floor: 10,
+            wall: 150,
+            longbrace: 45,
             moment: 10,
             shear: 5,
             gusset: 5
@@ -650,7 +682,7 @@
 
         // Fast O(1) lookup sets & pre-filtered raycast target arrays to avoid frame lag
         const occupiedSlotSet = new Set();
-        const slotsByType = { column: [], beam: [], brace: [], floor: [] };
+        const slotsByType = { column: [], beam: [], brace: [], floor: [], wall: [], longbrace: [] };
         const memberRaycastTargets = [];
         const connectionRaycastTargets = [];
 
@@ -708,7 +740,8 @@
         let uiHidden = false;
         const TOOL_LABELS = {
             column: ['view_column', 'Column'], beam: ['horizontal_rule', 'Beam'], brace: ['close', 'Brace'],
-            floor: ['grid_on', 'Floor Area'], connection: ['hub', 'Joint'], delete: ['delete', 'Delete']
+            floor: ['grid_on', 'Floor Area'], connection: ['hub', 'Joint'], delete: ['delete', 'Delete'],
+            longbrace: ['trending_up', 'Long Brace'], wall: ['view_agenda', 'Shear Wall']
         };
 
         function updateViewToolsUI() {
@@ -907,9 +940,34 @@
                 return `lin:${k1}|${k2}`;
             }
 
+            const sharedWallColliderGeo = new THREE.BoxGeometry(BAY_WIDTH * 0.62, STORY_HEIGHT * 0.62, 0.34);
+
+            // Vertical wall panel between grid points b1-b2 (bottom) and t1-t2 (top), one bay wide, one storey high
+            function registerWallSlot(b1, b2, t2, t1, axis) {
+                const center = new THREE.Vector3().addVectors(b1.restPos, t2.restPos).multiplyScalar(0.5);
+                const colliderMesh = new THREE.Mesh(sharedWallColliderGeo, colliderMat);
+                colliderMesh.position.copy(center);
+                if (axis === 'z') colliderMesh.rotation.y = Math.PI / 2;
+                const slotObj = {
+                    slotKey: `wall:${b1.key}|${b2.key}`,
+                    type: 'wall',
+                    axis,
+                    gx: b1.gx, gy: b1.gy, gz: b1.gz,
+                    n1: b1, n2: b2, n3: t2, n4: t1,
+                    corners: [b1, b2, t2, t1],
+                    center,
+                    length: BAY_WIDTH,
+                    colliderMesh
+                };
+                colliderMesh.userData.slot = slotObj;
+                collidersGroup.add(colliderMesh);
+                candidateSlots.push(slotObj);
+                slotsByType.wall.push(slotObj);
+            }
+
             function registerSlot(type, n1, n2) {
                 const dist = n1.restPos.distanceTo(n2.restPos);
-                const radius = type === 'brace' ? 0.36 : 0.46;
+                const radius = (type === 'brace' || type === 'longbrace') ? 0.36 : 0.46;
                 const colliderMesh = new THREE.Mesh(sharedLinearColliderGeo, colliderMat);
                 colliderMesh.scale.set(radius, dist * 0.88, radius);
 
@@ -1011,6 +1069,21 @@
                             }
                         }
 
+                        // 3b. Long bracing across two bays (8 m) in one storey, and shear wall panels
+                        if (gy < MAX_LEVELS) {
+                            const N = (x, y, z) => nodesMap.get(nodeKey(x, y, z));
+                            if (gx + 2 < GRID_SIZE) {
+                                registerSlot('longbrace', curr, N(gx + 2, gy + 1, gz));
+                                registerSlot('longbrace', N(gx + 2, gy, gz), N(gx, gy + 1, gz));
+                            }
+                            if (gz + 2 < GRID_SIZE) {
+                                registerSlot('longbrace', curr, N(gx, gy + 1, gz + 2));
+                                registerSlot('longbrace', N(gx, gy, gz + 2), N(gx, gy + 1, gz));
+                            }
+                            if (gx + 1 < GRID_SIZE) registerWallSlot(curr, N(gx + 1, gy, gz), N(gx + 1, gy + 1, gz), N(gx, gy + 1, gz), 'x');
+                            if (gz + 1 < GRID_SIZE) registerWallSlot(curr, N(gx, gy, gz + 1), N(gx, gy + 1, gz + 1), N(gx, gy + 1, gz), 'z');
+                        }
+
                         // 4. Horizontal Floor / Area Slabs (between 4 grid points on stories gy >= 1)
                         if (gy >= 1 && gx + 1 < GRID_SIZE && gz + 1 < GRID_SIZE) {
                             registerFloorSlot(gx, gy, gz);
@@ -1051,6 +1124,8 @@
             beamWeb: new THREE.BoxGeometry(0.045, 1.0, 0.32 - 2 * 0.055, 1, 16, 1),
             beamFlange: new THREE.BoxGeometry(0.28, 1.0, 0.055, 1, 16, 1),
             braceTube: new THREE.CylinderGeometry(0.09, 0.09, 1.0, 8),
+            longBraceTube: new THREE.CylinderGeometry(0.11, 0.11, 1.0, 10),
+            wallPanel: new THREE.BoxGeometry(1, 1, 1, 6, 4, 1),
             // Realistic Tapered Steel Beam Haunch Geometries (Local +Z points along beam from column center)
             haunchEndPlate: new THREE.BoxGeometry(0.30, 0.64, 0.036),
             haunchWeb: createHaunchWebGeometry(),
@@ -1217,7 +1292,7 @@
         function alignMemberMesh(m, useSimPos = false) {
             const p1 = useSimPos ? m.n1.simPos : m.n1.restPos;
             const p2 = useSimPos ? m.n2.simPos : m.n2.restPos;
-            if (m.type === 'brace') {
+            if (m.type === 'brace' || m.type === 'longbrace') {
                 const L = p1.distanceTo(p2);
                 const t = Math.min(0.3, BRACE_TUBE_TRIM / Math.max(L, 1e-6));
                 _trimA.copy(p1).lerp(p2, t);
@@ -1237,11 +1312,13 @@
             if (type === 'beam') baseHex = 0xd97706;  // Beam amber
             if (type === 'brace') baseHex = 0x059669; // Brace emerald
             if (type === 'floor') baseHex = 0x4f46e5; // Floor indigo-slate
+            if (type === 'longbrace') baseHex = 0x0f766e; // Long brace teal
+            if (type === 'wall') baseHex = 0x9ca3af;      // Concrete shear wall grey
 
             const mat = new THREE.MeshStandardMaterial({
                 color: isGhost ? 0x3b82f6 : baseHex,
-                roughness: type === 'floor' ? 0.65 : 0.35,
-                metalness: type === 'floor' ? 0.2 : 0.65,
+                roughness: type === 'floor' ? 0.65 : (type === 'wall' ? 0.9 : 0.35),
+                metalness: type === 'floor' ? 0.2 : (type === 'wall' ? 0.05 : 0.65),
                 transparent: isGhost || type === 'floor',
                 opacity: isGhost ? 0.45 : (type === 'floor' ? 0.88 : 1.0)
             });
@@ -1286,8 +1363,20 @@
                     group.userData.bendParts = [webMesh, f1Mesh, f2Mesh];
                 }
                 group.add(webMesh, f1Mesh, f2Mesh);
+            } else if (type === 'wall') {
+                // Own geometry: its vertices are mapped onto the four (possibly deformed) corner nodes
+                const wallMesh = new THREE.Mesh(SHARED_GEO.wallPanel.clone(), mat);
+                wallMesh.userData.ownGeometry = true;
+                wallMesh.userData.origPos = Float32Array.from(wallMesh.geometry.attributes.position.array);
+                wallMesh.frustumCulled = false;
+                if (!isGhost) {
+                    wallMesh.castShadow = true;
+                    wallMesh.receiveShadow = true;
+                }
+                group.add(wallMesh);
+                group.userData.wallPart = wallMesh;
             } else {
-                const cylMesh = new THREE.Mesh(SHARED_GEO.braceTube, mat);
+                const cylMesh = new THREE.Mesh(type === 'longbrace' ? SHARED_GEO.longBraceTube : SHARED_GEO.braceTube, mat);
                 if (!isGhost) {
                     cylMesh.castShadow = true;
                 }
@@ -1570,7 +1659,7 @@
             }
             for (let i = 0; i < members.length; i++) {
                 const m = members[i];
-                if (m.type !== 'brace') continue;
+                if (m.type !== 'brace' && m.type !== 'longbrace') continue;
                 for (const node of [m.n1, m.n2]) {
                     const key = `brace:${m.id}:${node.key}`;
                     if (braceConnectionsMap.has(key)) continue;
@@ -1633,7 +1722,7 @@
         }
 
         function updateCostAndCountsUI() {
-            const counts = { column: 0, beam: 0, brace: 0, floor: 0 };
+            const counts = { column: 0, beam: 0, brace: 0, floor: 0, wall: 0, longbrace: 0 };
             for (let i = 0; i < members.length; i++) {
                 counts[members[i].type]++;
             }
@@ -1646,7 +1735,7 @@
             });
 
             // Update placed counts on bottom dock buttons
-            ['column', 'beam', 'brace', 'floor'].forEach(type => {
+            ['column', 'beam', 'brace', 'floor', 'wall', 'longbrace'].forEach(type => {
                 const badge = document.getElementById(`count-${type}`);
                 if (badge) badge.textContent = counts[type];
             });
@@ -1662,6 +1751,8 @@
                 counts.beam * UNIT_PRICES.beam +
                 counts.brace * UNIT_PRICES.brace +
                 counts.floor * UNIT_PRICES.floor +
+                counts.wall * UNIT_PRICES.wall +
+                counts.longbrace * UNIT_PRICES.longbrace +
                 rigidCount * UNIT_PRICES.moment +
                 shearCount * UNIT_PRICES.shear +
                 braceConnectionsMap.size * UNIT_PRICES.gusset;
@@ -1703,7 +1794,8 @@
             const totalSteelKg =
                 counts.column * (3.5 * 108.0) +
                 counts.beam * (4.0 * 74.0) +
-                counts.brace * (Math.hypot(BAY_WIDTH, STORY_HEIGHT) * 42.0);
+                counts.brace * (Math.hypot(BAY_WIDTH, STORY_HEIGHT) * 42.0) +
+                counts.longbrace * (Math.hypot(2 * BAY_WIDTH, STORY_HEIGHT) * 62.0);
             const tonnageEl = document.getElementById('metric-tonnage');
             if (tonnageEl) {
                 tonnageEl.textContent = `${(totalSteelKg / 1000).toFixed(2)} t`;
@@ -1727,6 +1819,48 @@
                 _tempMat4.makeBasis(_tempRight, _tempDir, _tempForward);
                 mesh.quaternion.setFromRotationMatrix(_tempMat4);
             }
+        }
+
+        // Shear wall: map the panel's vertices onto its four corner nodes (bottom b1-b2, top t2-t1),
+        // set back from the column faces and stopping under the beam
+        const _wallU = new THREE.Vector3();
+        function alignWallMesh(mesh, corners, useSimPos = false) {
+            const part = mesh.userData.wallPart;
+            if (!part) return;
+            const P = c => (useSimPos ? c.simPos : c.restPos);
+            const b1 = P(corners[0]), b2 = P(corners[1]), t2 = P(corners[2]), t1 = P(corners[3]);
+            const L = corners[0].restPos.distanceTo(corners[1].restPos) || 1;
+            const a = 0.17 / L;
+            const topCut = 0.32 / STORY_HEIGHT;
+            const tw = STRUCT.wall.t;
+            _wallU.subVectors(corners[1].restPos, corners[0].restPos).normalize();
+            const nx = -_wallU.z, nz = _wallU.x;
+            mesh.position.set(0, 0, 0);
+            mesh.quaternion.set(0, 0, 0, 1);
+            mesh.rotation.set(0, 0, 0);
+            mesh.scale.set(1, 1, 1);
+            const orig = part.userData.origPos;
+            const pos = part.geometry.attributes.position;
+            const arr = pos.array;
+            for (let i = 0; i < arr.length; i += 3) {
+                const sx = a + (orig[i] + 0.5) * (1 - 2 * a);
+                const ty = (orig[i + 1] + 0.5) * (1 - topCut);
+                const w = orig[i + 2] * tw;
+                const bx = b1.x + (b2.x - b1.x) * sx, by = b1.y + (b2.y - b1.y) * sx, bz = b1.z + (b2.z - b1.z) * sx;
+                const tx = t1.x + (t2.x - t1.x) * sx, tyy = t1.y + (t2.y - t1.y) * sx, tz = t1.z + (t2.z - t1.z) * sx;
+                arr[i] = bx + (tx - bx) * ty + nx * w;
+                arr[i + 1] = by + (tyy - by) * ty;
+                arr[i + 2] = bz + (tz - bz) * ty + nz * w;
+            }
+            pos.needsUpdate = true;
+            part.geometry.computeBoundingSphere();
+            part.geometry.computeBoundingBox();
+        }
+
+        function alignAnyMember(m, useSimPos = false) {
+            if (m.type === 'floor') alignFloorMesh(m.mesh, m.corners, useSimPos);
+            else if (m.type === 'wall') alignWallMesh(m.mesh, m.corners, useSimPos);
+            else alignMemberMesh(m, useSimPos);
         }
 
         // Align a 4-corner floor slab mesh to its 4 corner nodes
@@ -1765,7 +1899,7 @@
                 stopSimulation();
             }
             currentTool = tool;
-            ['column', 'beam', 'brace', 'floor', 'connection', 'delete'].forEach(t => {
+            ['column', 'beam', 'brace', 'floor', 'longbrace', 'wall', 'connection', 'delete'].forEach(t => {
                 const btn = document.getElementById(`tool-${t}`);
                 if (!btn) return;
                 if (t === tool) btn.classList.add('tool-active');
@@ -1908,6 +2042,98 @@
             }
         }
 
+        /***********************************************************************
+         * SHEAR WALLS & LONG BRACES: placement rules
+         * - A wall fills one bay x one storey and needs a column on both sides.
+         * - A long brace crosses two bays (8 m) in one storey, needs columns at both ends
+         *   and no column on the middle line (it would hit it).
+         * - Panels can't be shared: a wall excludes any brace; a long brace excludes normal
+         *   braces (two long braces may cross as an X).
+         ***********************************************************************/
+        function findMemberBetween(type, a, b) {
+            for (let i = 0; i < members.length; i++) {
+                const m = members[i];
+                if (m.type === type && ((m.n1 === a && m.n2 === b) || (m.n1 === b && m.n2 === a))) return m;
+            }
+            return null;
+        }
+
+        // Vertical panels (one bay x one storey) a brace / long brace / wall occupies
+        function panelKeys(n1, n2) {
+            const axis = n1.gz === n2.gz ? 'x' : 'z';
+            const line = axis === 'x' ? n1.gz : n1.gx;
+            const a1 = axis === 'x' ? n1.gx : n1.gz;
+            const a2 = axis === 'x' ? n2.gx : n2.gz;
+            const gy0 = Math.min(n1.gy, n2.gy);
+            const keys = [];
+            for (let i = Math.min(a1, a2); i < Math.max(a1, a2); i++) keys.push(`${axis}:${line}:${i}:${gy0}`);
+            return keys;
+        }
+
+        // The storey columns at the two ends (and the middle line) of a long brace or wall
+        function storeyColumnAt(node, gyBottom) {
+            const key = (x, y, z) => nodesMap.get(nodeKey(x, y, z));
+            const bot = key(node.gx, gyBottom, node.gz), top = key(node.gx, gyBottom + 1, node.gz);
+            return bot && top ? findMemberBetween('column', bot, top) : null;
+        }
+
+        function longBraceMiddleLine(slot) {
+            const gy0 = Math.min(slot.n1.gy, slot.n2.gy);
+            const mx = (slot.n1.gx + slot.n2.gx) / 2, mz = (slot.n1.gz + slot.n2.gz) / 2;
+            return nodesMap.get(nodeKey(mx, gy0, mz));
+        }
+
+        function supportsOk(slot) {
+            if (slot.type === 'wall') {
+                return Boolean(storeyColumnAt(slot.n1, slot.n1.gy) && storeyColumnAt(slot.n2, slot.n2.gy));
+            }
+            if (slot.type === 'longbrace') {
+                const gy0 = Math.min(slot.n1.gy, slot.n2.gy);
+                return Boolean(storeyColumnAt(slot.n1, gy0) && storeyColumnAt(slot.n2, gy0)) &&
+                    !storeyColumnAt(longBraceMiddleLine(slot), gy0);
+            }
+            return true;
+        }
+
+        function checkPlacement(slot) {
+            const t = slot.type;
+            if (t === 'column') {
+                // A long brace passing this grid line in this storey would hit the new column
+                for (const m of members) {
+                    if (m.type !== 'longbrace') continue;
+                    const gy0 = Math.min(m.n1.gy, m.n2.gy);
+                    const mid = longBraceMiddleLine(m);
+                    if (gy0 === Math.min(slot.n1.gy, slot.n2.gy) && mid && mid.gx === slot.n1.gx && mid.gz === slot.n1.gz) {
+                        return { ok: false, msg: 'A long brace crosses this grid line here. Remove it before adding a column.' };
+                    }
+                }
+                return { ok: true };
+            }
+            if (t !== 'wall' && t !== 'brace' && t !== 'longbrace') return { ok: true };
+            if (t === 'wall' && !supportsOk(slot)) {
+                return { ok: false, msg: 'A shear wall sits between two columns: place a column on both sides of this bay first.' };
+            }
+            if (t === 'longbrace' && !supportsOk(slot)) {
+                const gy0 = Math.min(slot.n1.gy, slot.n2.gy);
+                if (storeyColumnAt(longBraceMiddleLine(slot), gy0)) {
+                    return { ok: false, msg: 'A long brace spans two bays with no column in between: remove the middle column, or use normal braces.' };
+                }
+                return { ok: false, msg: 'A long brace runs between two columns 8 m apart: place both columns first.' };
+            }
+            const mine = new Set(panelKeys(slot.n1, slot.n2));
+            for (const m of members) {
+                if (m.type !== 'wall' && m.type !== 'brace' && m.type !== 'longbrace') continue;
+                const theirs = panelKeys(m.n1, m.n2);
+                if (!theirs.some(k => mine.has(k))) continue;
+                if (t === 'brace' && m.type === 'brace') continue;               // X-bracing is fine
+                if (t === 'longbrace' && m.type === 'longbrace' &&
+                    theirs.length === mine.size && theirs.every(k => mine.has(k))) continue; // long X-bracing
+                const what = m.type === 'wall' ? 'a shear wall' : (m.type === 'longbrace' ? 'a long brace' : 'a brace');
+                return { ok: false, msg: `This bay already has ${what}. A bay can hold a shear wall or bracing, not both.` };
+            }
+            return { ok: true };
+        }
+
         function isSlotOccupied(slot) {
             return occupiedSlotSet.has(slot.slotKey);
         }
@@ -1927,9 +2153,20 @@
                 }
             }
 
+            const placeCheck = checkPlacement(slot);
+            if (!placeCheck.ok) {
+                if (!silent) {
+                    playSound('delete');
+                    showStatusMessage(placeCheck.msg, true);
+                }
+                return false;
+            }
+
             const mesh = createSteelMemberMesh(slot.type, slot.length, false);
             if (slot.type === 'floor') {
                 alignFloorMesh(mesh, slot.corners, false);
+            } else if (slot.type === 'wall') {
+                alignWallMesh(mesh, slot.corners, false);
             } else {
                 alignMemberMesh({ type: slot.type, mesh, n1: slot.n1, n2: slot.n2 }, false);
             }
@@ -1983,9 +2220,10 @@
             if (!silent) {
                 playSound('place');
                 const price = UNIT_PRICES[slot.type];
-                const label = slot.type === 'floor' ? 'Floor Area slab' : `steel ${slot.type}`;
-                if (slot.type === 'brace') {
-                    showStatusMessage(`Added steel brace (+$${price}) with 2 bolted gusset shear connections (+$${2 * UNIT_PRICES.gusset}).`);
+                const label = slot.type === 'floor' ? 'Floor Area slab'
+                    : (slot.type === 'wall' ? 'reinforced concrete shear wall' : (slot.type === 'longbrace' ? 'long steel brace (8 m)' : `steel ${slot.type}`));
+                if (slot.type === 'brace' || slot.type === 'longbrace') {
+                    showStatusMessage(`Added ${slot.type === 'longbrace' ? 'long steel brace across two bays' : 'steel brace'} (+$${price}) with 2 bolted gusset shear connections (+$${2 * UNIT_PRICES.gusset}).`);
                 } else {
                     showStatusMessage(`Added ${label} (+$${price})`);
                 }
@@ -2092,14 +2330,32 @@
                 }
             }
 
+            // Walls and long braces need their columns
+            let autoRemovedWalls = 0;
+            if (memberObj.type === 'column') {
+                const dependants = members.filter(m => (m.type === 'wall' || m.type === 'longbrace') && !supportsOk(m));
+                dependants.forEach(m => {
+                    const k = members.indexOf(m);
+                    if (k === -1) return;
+                    members.splice(k, 1);
+                    occupiedSlotSet.delete(m.slotKey);
+                    membersGroup.remove(m.mesh);
+                    disposeMemberMesh(m.mesh);
+                    autoRemovedWalls++;
+                });
+            }
+
             rebuildMemberRaycastCache();
             syncConnections();
             if (!silent) {
                 playSound('delete');
-                if (autoRemovedFloors > 0) {
+                if (autoRemovedWalls > 0) {
+                    showStatusMessage(`Removed column and ${autoRemovedWalls} wall(s) / long brace(s) that needed it.`);
+                } else if (autoRemovedFloors > 0) {
                     showStatusMessage(`Removed beam and ${autoRemovedFloors} unsupported floor slab(s).`);
                 } else {
-                    showStatusMessage(`Removed ${memberObj.type} (-$${UNIT_PRICES[memberObj.type]}).`);
+                    const nm = memberObj.type === 'wall' ? 'shear wall' : (memberObj.type === 'longbrace' ? 'long brace' : memberObj.type);
+                    showStatusMessage(`Removed ${nm} (-$${UNIT_PRICES[memberObj.type]}).`);
                 }
             }
         }
@@ -2195,8 +2451,17 @@
                             showStatusMessage("Requires at least 2 parallel beams between these 4 grid points to place Floor Area!", true);
                         }
                     } else {
-                        alignMeshBetweenPoints(ghostMesh, hoveredCandidate.n1.restPos, hoveredCandidate.n2.restPos);
-                        ghostMesh.userData.primaryMaterial.color.setHex(0x3b82f6);
+                        if (currentTool === 'wall') alignWallMesh(ghostMesh, hoveredCandidate.corners, false);
+                        else alignMeshBetweenPoints(ghostMesh, hoveredCandidate.n1.restPos, hoveredCandidate.n2.restPos);
+                        const pc = checkPlacement(hoveredCandidate);
+                        if (pc.ok) {
+                            ghostMesh.userData.primaryMaterial.color.setHex(currentTool === 'wall' || currentTool === 'longbrace' ? 0x22c55e : 0x3b82f6);
+                            if (currentTool === 'wall') showStatusMessage(`Shear wall ($${UNIT_PRICES.wall}): 200 mm reinforced concrete between two columns. Click to place.`);
+                            if (currentTool === 'longbrace') showStatusMessage(`Long brace ($${UNIT_PRICES.longbrace}): spans two bays between columns 8 m apart. Click to place.`);
+                        } else {
+                            ghostMesh.userData.primaryMaterial.color.setHex(0xef4444);
+                            showStatusMessage(pc.msg, true);
+                        }
                     }
                     ghostMesh.visible = true;
                 }
@@ -2296,6 +2561,8 @@
             if (e.key === '2') selectTool('beam');
             if (e.key === '3') selectTool('brace');
             if (e.key === '4') selectTool('floor');
+            if (e.key === '7') selectTool('longbrace');
+            if (e.key === '8') selectTool('wall');
             if (e.key === '5') selectTool('connection');
             if (e.key === '6') selectTool('delete');
             if (e.key === 'h' || e.key === 'H') toggleHideUI();
@@ -2326,6 +2593,10 @@
             beam:   { A: 0.00948, Is: 1.65e-4, Iw: 2.34e-5, Ss: 1.06e-3, Sw: 0.228e-3, J: 0.8e-6, w: 0.73 },
             // Round HSS brace, axial only
             brace:  { A: 0.00633, I: 2.25e-5, w: 0.50 },
+            // Long brace across two bays: larger round HSS (~HSS 219 x 12), axial only
+            longbrace: { A: 0.0078, I: 4.3e-5, w: 0.61 },
+            // Reinforced concrete shear wall panel, 200 mm thick
+            wall: { t: 0.2, Ec: 3.0e7, Gc: 1.25e7, vcap: 1200, fcd: 14000, gamma: 25 },
             slabDiagEA: 1.0e7,   // in-plane diaphragm stiffness of a 150 mm deck
             slabLoad: 5.0,       // kN/m2 dead + live on each Floor Area
             notional: 0.005,     // EC3 notional sway imperfection (1/200 of gravity)
@@ -2488,7 +2759,7 @@
             const active = new Map();
             const addNode = nd => { if (nd && !active.has(nd.key)) active.set(nd.key, nd); };
             for (const m of members) {
-                if (m.type === 'floor') m.corners.forEach(addNode);
+                if (m.corners) m.corners.forEach(addNode);
                 else { addNode(m.n1); addNode(m.n2); }
             }
             const dofMap = new Map();
@@ -2554,15 +2825,43 @@
                 addTruss(m.corners[1], m.corners[3], STRUCT.slabDiagEA, null);
             }
 
+            // Shear walls: equivalent truss panel. X-diagonals give the panel shear stiffness G t L / H,
+            // edge verticals give the wall's in-plane bending stiffness (I = t L^3 / 12), and the
+            // horizontals close the panel. Self weight goes to the four corners (also seismic mass).
+            const wallParts = [];
             for (const m of members) {
-                if (m.type === 'floor') continue;
+                if (m.type !== 'wall') continue;
+                const Wd = STRUCT.wall;
+                const [b1, b2, t2, t1] = m.corners;
+                const Lw = b1.restPos.distanceTo(b2.restPos);
+                const Hw = b1.restPos.distanceTo(t1.restPos);
+                const Ld = Math.hypot(Lw, Hw);
+                const cos = Lw / Ld;
+                const kShear = Wd.Gc * Wd.t * Lw / Hw;
+                const EAd = kShear * Ld / (2 * cos * cos);
+                const EAv = Wd.Ec * Wd.t * Lw / 6;
+                const EAh = Wd.Ec * Wd.t * Hw / 6;
+                const wt = Wd.gamma * Wd.t * Lw * Hw;
+                m.corners.forEach(c => addGrav(c, wt / 4));
+                const i0 = elems.length;
+                addTruss(b1, t2, EAd, null);
+                addTruss(b2, t1, EAd, null);
+                addTruss(b1, t1, EAv, null);
+                addTruss(b2, t2, EAv, null);
+                addTruss(t1, t2, EAh, null);
+                if (b1.gy > 0) addTruss(b1, b2, EAh, null);
+                wallParts.push({ m, d1: elems[i0], d2: elems[i0 + 1], v1: elems[i0 + 2], v2: elems[i0 + 3], cos, Lw });
+            }
+
+            for (const m of members) {
+                if (m.type === 'floor' || m.type === 'wall') continue;
                 const L = m.n1.restPos.distanceTo
                     ? m.n1.restPos.distanceTo(m.n2.restPos)
                     : Math.hypot(m.n2.restPos.x - m.n1.restPos.x, m.n2.restPos.y - m.n1.restPos.y, m.n2.restPos.z - m.n1.restPos.z);
                 const sec = STRUCT[m.type];
                 addGrav(m.n1, sec.w * L / 2);
                 addGrav(m.n2, sec.w * L / 2);
-                if (m.type === 'brace') { addTruss(m.n1, m.n2, STRUCT.E * sec.A, m); continue; }
+                if (m.type === 'brace' || m.type === 'longbrace') { addTruss(m.n1, m.n2, STRUCT.E * sec.A, m); continue; }
 
                 const depth = m.type === 'column' ? [0, 0, 1] : [0, 1, 0];
                 const ax = localAxes(m.n1.restPos, m.n2.restPos, depth);
@@ -2710,7 +3009,8 @@
                 if (e.kind === 'truss') {
                     const ua = disp.get(e.na.key), ub = disp.get(e.nb.key);
                     const N = e.k * (e.c[0] * (ub[0] - ua[0]) + e.c[1] * (ub[1] - ua[1]) + e.c[2] * (ub[2] - ua[2]));
-                    const A = STRUCT.brace.A, I = STRUCT.brace.I;
+                    const bsec = STRUCT[m.type] || STRUCT.brace;
+                    const A = bsec.A, I = bsec.I;
                     const r = Math.sqrt(I / A);
                     const Fe = Math.PI * Math.PI * STRUCT.E / Math.pow(e.L / r, 2);
                     const Fcr = fy / Fe <= 2.25 ? Math.pow(0.658, fy / Fe) * fy : 0.877 * Fe;
@@ -2748,6 +3048,21 @@
                 const lateralUtil = Math.abs(N) / Ncap + Ms / (sec.Ss * fy) + Mw / (sec.Sw * fy);
                 const util = lateralUtil + Mg / (sec.Ss * fy);
                 results.set(m, { N, Ms, Mw, Mg, util, lateralUtil });
+            }
+
+            // 4b. Shear wall checks: panel shear stress vs v_cap and edge compression vs f_cd
+            const trussForce = e => {
+                const ua = disp.get(e.na.key), ub = disp.get(e.nb.key);
+                return e.k * (e.c[0] * (ub[0] - ua[0]) + e.c[1] * (ub[1] - ua[1]) + e.c[2] * (ub[2] - ua[2]));
+            };
+            for (const wp of wallParts) {
+                const Wd = STRUCT.wall;
+                const V = Math.abs(trussForce(wp.d1) - trussForce(wp.d2)) * wp.cos;
+                const Nedge = Math.max(Math.abs(trussForce(wp.v1)), Math.abs(trussForce(wp.v2)));
+                const utilV = V / (Wd.vcap * Wd.t * wp.Lw);
+                const utilN = Nedge / (Wd.fcd * Wd.t * wp.Lw / 6);
+                const util = Math.max(utilV, utilN);
+                results.set(wp.m, { N: V, Ms: 0, Mw: 0, util, lateralUtil: util, V });
             }
 
             // 5. Storey metrics: rigid-body fit of each floor, drift, torsion, P-Delta
@@ -2792,9 +3107,20 @@
                     drifts.push({ col: m, along: dx * D[0] + dz * D[2], total: Math.hypot(dx, dz) });
                     maxDriftRatio = Math.max(maxDriftRatio, Math.hypot(dx, dz) / H);
                 }
+                // Torsion ratio from the floors' rigid-body motion (translation + twist), so local
+                // stretching of very stiff elements (e.g. shear walls) is not mistaken for twist
                 let torsionRatio = 1;
-                if (drifts.length >= 2) {
-                    const absA = drifts.map(d => Math.abs(d.along));
+                const prevFit = L > 1 && storeys[L - 2] ? storeys[L - 2].fit : null;
+                const rigidAlong = (f, x, z) => f
+                    ? D[0] * (f.tx + f.theta * (z - f.zc)) + D[2] * (f.tz - f.theta * (x - f.xc))
+                    : 0;
+                if (drifts.length >= 2 && fit) {
+                    const absA = drifts.map(d => {
+                        const top = d.col.n1.gy > d.col.n2.gy ? d.col.n1 : d.col.n2;
+                        const x = top.restPos.x, z = top.restPos.z;
+                        d.rigidAlong = rigidAlong(fit, x, z) - rigidAlong(prevFit, x, z);
+                        return Math.abs(d.rigidAlong);
+                    });
                     const avg = absA.reduce((s, v) => s + v, 0) / absA.length;
                     if (avg > 1e-7) torsionRatio = Math.max(...absA) / avg;
                 }
@@ -2936,8 +3262,7 @@
         function rerunAnalysis() {
             // put any fallen pieces back before re-analysing
             for (const m of members) {
-                if (m.type === 'floor') alignFloorMesh(m.mesh, m.corners, false);
-                else alignMemberMesh(m, false);
+                alignAnyMember(m, false);
             }
             maxObservedSwayMm = 0;
             maxObservedStressPct = 0;
@@ -3018,6 +3343,14 @@
             const adj = new Map();
             for (const m of members) {
                 if (m.type === 'floor' || failedSet.has(m)) continue;
+                if (m.type === 'wall') {
+                    for (const a of m.corners) for (const b of m.corners) {
+                        if (a === b) continue;
+                        if (!adj.has(a.key)) adj.set(a.key, []);
+                        adj.get(a.key).push(b);
+                    }
+                    continue;
+                }
                 if (!adj.has(m.n1.key)) adj.set(m.n1.key, []);
                 if (!adj.has(m.n2.key)) adj.set(m.n2.key, []);
                 adj.get(m.n1.key).push(m.n2);
@@ -3089,7 +3422,7 @@
             if (res.isMechanism) {
                 failMode = 'mechanism';
                 for (const m of members) {
-                    const nds = m.type === 'floor' ? m.corners : [m.n1, m.n2];
+                    const nds = m.corners ? m.corners : [m.n1, m.n2];
                     if (nds.some(nd => res.unstableNodes.has(nd.key))) failed.add(m);
                 }
             }
@@ -3100,7 +3433,7 @@
                 if (m.type === 'floor') continue;
                 const r = res.results.get(m);
                 if (!r) continue;
-                const level = m.type === 'beam' ? m.n1.gy : Math.max(m.n1.gy, m.n2.gy);
+                const level = m.type === 'beam' ? m.n1.gy : (m.type === 'wall' ? m.n3.gy : Math.max(m.n1.gy, m.n2.gy));
                 const st = storeyMap.get(level);
                 const th = st ? st.thetaPD : 0;
                 const B = th < 0.9 ? 1 / (1 - th) : 10;
@@ -3122,7 +3455,7 @@
                 if (st.maxDriftRatio > maxDrift) { maxDrift = st.maxDriftRatio; maxDriftStorey = st; }
                 if (st.thetaPD > maxTheta) maxTheta = st.thetaPD;
                 const significant = st.drifts.length >= 2 &&
-                    Math.max(...st.drifts.map(d => Math.abs(d.along))) > 1e-5;
+                    Math.max(...st.drifts.map(d => Math.abs(d.rigidAlong !== undefined ? d.rigidAlong : d.along))) > 1e-5;
                 if (lateralActive() && significant && st.torsionRatio > worstTors) {
                     worstTors = st.torsionRatio;
                     torsStorey = st;
@@ -3144,7 +3477,8 @@
             const grounded = findGroundedNodes(failed);
             for (const m of members) {
                 if (m.type === 'floor' || failed.has(m)) continue;
-                if (!grounded.has(m.n1.key) || !grounded.has(m.n2.key)) failed.add(m);
+                const nds = m.corners || [m.n1, m.n2];
+                if (nds.some(nd => !grounded.has(nd.key))) failed.add(m);
             }
             for (const m of members) {
                 if (m.type !== 'floor' || failed.has(m)) continue;
@@ -3244,7 +3578,7 @@
                     const where = !(wm && wm.n1) ? 'a member'
                         : wm.type === 'column'
                             ? `column at ${gridLabel(wm.n1)}, storey ${Math.max(wm.n1.gy, wm.n2.gy)}`
-                            : `${wm.type} at ${gridLabel(wm.n1)}–${gridLabel(wm.n2)}, level ${Math.max(wm.n1.gy, wm.n2.gy)}`;
+                            : `${({ longbrace: 'long brace', wall: 'shear wall' })[wm.type] || wm.type} at ${gridLabel(wm.n1)}–${gridLabel(wm.n2)}, ${wm.type === 'wall' ? 'storey ' + (wm.n1.gy + 1) : 'level ' + Math.max(wm.n1.gy, wm.n2.gy)}`;
                     title = 'Collapse — steel member yielded!';
                     desc = `The ${where} reached ${Math.round((wm && wm.util || 1) * 100)}% of its capacity in the ${loadName.replace(' wind', '')}${quake ? '' : ' wind'}. Add bracing to share the load, or reduce the height.`;
                 } else {
@@ -3265,7 +3599,7 @@
                         const e = windDir === 'x' ? Math.abs(st.cp.z - st.cr.z) : Math.abs(st.cp.x - st.cr.x);
                         ecc = ` The centre of rigidity (CR) sits ${e.toFixed(1)} m away from the ${resultantName}, so the floor rotates ${thetaDeg.toFixed(3)}°.`;
                     }
-                    parts.push(`Storey ${st.level}: the worst column drifts ${worstTors.toFixed(2)}× the average.${ecc} Balance the bracing on opposite sides of the building.`);
+                    parts.push(`Storey ${st.level}: the worst column drifts ${worstTors.toFixed(2)}× the average.${ecc} Balance the bracing or shear walls on opposite sides of the building.`);
                 }
                 if (swaying) {
                     parts.push(`Max storey drift ${fmtH(maxDrift)} exceeds H/${Math.round(1 / DRIFT_SERVICE)}${quake ? ': walls, windows and ceilings would be damaged' : ''}. Moment frames resist sway by bending, so they are much more flexible than braced frames.`);
@@ -3412,8 +3746,11 @@
 
                 if (m.failed && !collapseNow) {
                     // Damaged but still standing until the strong shaking arrives
-                    if (m.type === 'floor') alignFloorMesh(m.mesh, m.corners, true);
-                    else alignMemberMesh(m, true);
+                    alignAnyMember(m, true);
+                } else if (m.failed && m.type === 'wall') {
+                    // A failed wall cracks and drops in place (its geometry is in world coordinates)
+                    m.collapseVel.y -= 16.5 * dt;
+                    m.mesh.position.y = Math.max(-m.n1.restPos.y - 0.2, m.mesh.position.y + m.collapseVel.y * dt);
                 } else if (m.failed) {
                     if (m.mesh.userData.bent) resetMemberBend(m);
                     // Dynamic plastic buckling / collapse trajectory
@@ -3432,8 +3769,8 @@
                         m.collapseVel.z *= 0.6;
                         m.collapseRotVel.multiplyScalar(0.5);
                     }
-                } else if (m.type === 'floor') {
-                    alignFloorMesh(m.mesh, m.corners, true);
+                } else if (m.type === 'floor' || m.type === 'wall') {
+                    alignAnyMember(m, true);
                 } else {
                     alignMemberMesh(m, true);
                     bendMemberMesh(m, deformScale * gust);
@@ -3524,11 +3861,7 @@
                 m.failed = false;
                 m.stress = 0;
                 m.mesh.userData.primaryMaterial.color.copy(m.mesh.userData.baseColor);
-                if (m.type === 'floor') {
-                    alignFloorMesh(m.mesh, m.corners, false);
-                } else {
-                    alignMemberMesh(m, false);
-                }
+                alignAnyMember(m, false);
             }
 
             connectionsMap.forEach(conn => {
@@ -3776,7 +4109,8 @@
                 clearStructure(true);
 
                 // Place linear members first so beams exist before floor slabs are validated
-                const nonFloors = data.members.filter(m => m.type !== 'floor');
+                const rank = t => (t === 'wall' || t === 'longbrace') ? 1 : 0;
+                const nonFloors = data.members.filter(m => m.type !== 'floor').sort((a, b) => rank(a.type) - rank(b.type));
                 const floors = data.members.filter(m => m.type === 'floor');
 
                 for (const item of nonFloors) {
@@ -4380,6 +4714,30 @@
                     continue;
                 }
 
+                if (m.type === 'wall') {
+                    const lvl = Math.min(MAX_LEVELS, Math.max(0, m.n1.gy));
+                    const elev = lvl * STORY_HEIGHT;
+                    const c3 = new THREE.Vector3().addVectors(m.n1.restPos, m.n2.restPos).multiplyScalar(0.5);
+                    const bp = toBimVec(c3);
+                    const a = toBimVec(m.n1.restPos), b = toBimVec(m.n2.restPos);
+                    const wl = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+                    const wx = (b.x - a.x) / wl, wy = (b.y - a.y) / wl;
+                    const wallLen = wl - 0.34, wallH = STORY_HEIGHT - 0.32;
+                    const wPt = addEntity(`IFCCARTESIANPOINT((${fmtIfcNum(bp.x)},${fmtIfcNum(bp.y)},${fmtIfcNum(bp.z - elev)}))`);
+                    const wDir = addEntity(`IFCDIRECTION((${fmtIfcNum(wx)},${fmtIfcNum(wy)},0.))`);
+                    const wAxis = addEntity(`IFCAXIS2PLACEMENT3D(${wPt},${dirZ},${wDir})`);
+                    const wPlace = addEntity(`IFCLOCALPLACEMENT(${storeyPlacements[lvl]},${wAxis})`);
+                    const wProfile = addEntity(`IFCRECTANGLEPROFILEDEF(.AREA.,'RC_Wall_200',${pos2D},${fmtIfcNum(wallLen)},0.2)`);
+                    const wSolid = addEntity(`IFCEXTRUDEDAREASOLID(${wProfile},${worldCoordSystem},${dirZ},${fmtIfcNum(wallH)})`);
+                    const wRep = addEntity(`IFCSHAPEREPRESENTATION(${bodySubContext},'Body','SweptSolid',(${wSolid}))`);
+                    const wShape = addEntity(`IFCPRODUCTDEFINITIONSHAPE($,$,(${wRep}))`);
+                    const wallEntity = addEntity(`IFCWALL('${generateIfcGuid()}',${ownerHistory},'Shear_Wall_${m.id}','200mm Reinforced Concrete Shear Wall','RC Wall 200mm',${wPlace},${wShape},'SW_${m.id}')`);
+                    storeyElements[lvl].push(wallEntity);
+                    concreteSlabsList.push(wallEntity);
+                    exportedCount++;
+                    continue;
+                }
+
                 // Linear Member: Column, Beam, or Brace
                 const nStart = m.n1.gy <= m.n2.gy ? m.n1 : m.n2;
                 const nEnd = m.n1.gy <= m.n2.gy ? m.n2 : m.n1;
@@ -4437,7 +4795,8 @@
                     entityRef = addEntity(`IFCBEAM('${generateIfcGuid()}',${ownerHistory},'Steel_Beam_${m.id}','Wide Flange Steel Beam','W280x320',${memberPlacement},${prodShape},'BM_${m.id}')`);
                 } else {
                     // Export Diagonal Bracing as IfcMember / IfcBeam so Revit imports it under Structural Framing
-                    entityRef = addEntity(`IFCBEAM('${generateIfcGuid()}',${ownerHistory},'Diagonal_Brace_${m.id}','HSS Diagonal Structural Brace','HSS180x12',${memberPlacement},${prodShape},'BR_${m.id}')`);
+                    const isLong = m.type === 'longbrace';
+                    entityRef = addEntity(`IFCBEAM('${generateIfcGuid()}',${ownerHistory},'${isLong ? 'Long_Brace' : 'Diagonal_Brace'}_${m.id}','HSS Diagonal Structural Brace','${isLong ? 'HSS219x12' : 'HSS180x12'}',${memberPlacement},${prodShape},'BR_${m.id}')`);
                 }
 
                 storeyElements[lvl].push(entityRef);
@@ -4734,10 +5093,45 @@
                 ctx.restore();
             }
 
-            // Braces, beams, columns in this plane
+            // Shear walls in this plane: hatched concrete panel between the columns, under the beam
             for (const m of members) {
-                if (m.type !== 'brace' || m.failed || !onLine(m.n1) || !onLine(m.n2)) continue;
-                line(toXY(m.n1), toXY(m.n2), stressColorCSS(m.stress, '#059669'), 3.5);
+                if (m.type !== 'wall' || m.failed || !m.corners.every(onLine)) continue;
+                const [b1, b2, t2, t1] = m.corners.map(c => toXY(c));
+                const inset = 0.17 * ppm, top = 0.32 * ppm;
+                const lerp = (a, b, f) => ({ x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f });
+                const L = Math.hypot(b2.x - b1.x, b2.y - b1.y) || 1;
+                const f = inset / L;
+                const q1 = lerp(b1, b2, f), q2 = lerp(b1, b2, 1 - f);
+                const r1 = lerp(t1, t2, f), r2 = lerp(t1, t2, 1 - f);
+                const Hh = Math.hypot(r1.x - q1.x, r1.y - q1.y) || 1;
+                const g = 1 - top / Hh;
+                const s1 = lerp(q1, r1, g), s2 = lerp(q2, r2, g);
+                ctx.save();
+                ctx.fillStyle = stressColorCSS(m.stress, '#d1d5db');
+                ctx.strokeStyle = '#475569';
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                ctx.moveTo(q1.x, q1.y); ctx.lineTo(q2.x, q2.y); ctx.lineTo(s2.x, s2.y); ctx.lineTo(s1.x, s1.y);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                ctx.clip();
+                ctx.strokeStyle = 'rgba(71, 85, 105, 0.35)';
+                ctx.lineWidth = 0.8;
+                const minX = Math.min(q1.x, s1.x) - 200, maxX = Math.max(q2.x, s2.x) + 200;
+                for (let xx = minX; xx < maxX; xx += 9) {
+                    ctx.beginPath();
+                    ctx.moveTo(xx, Math.max(q1.y, q2.y) + 5);
+                    ctx.lineTo(xx + 60, Math.min(s1.y, s2.y) - 55);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+
+            // Braces, long braces, beams, columns in this plane
+            for (const m of members) {
+                if ((m.type !== 'brace' && m.type !== 'longbrace') || m.failed || !onLine(m.n1) || !onLine(m.n2)) continue;
+                line(toXY(m.n1), toXY(m.n2), stressColorCSS(m.stress, m.type === 'longbrace' ? '#0f766e' : '#059669'), m.type === 'longbrace' ? 4.5 : 3.5);
             }
             for (const m of members) {
                 if (m.type !== 'beam' || m.failed || !onLine(m.n1) || !onLine(m.n2)) continue;
@@ -5286,6 +5680,58 @@
                 planCtx.moveTo(p1.x, p1.y);
                 planCtx.lineTo(p2.x, p2.y);
                 planCtx.stroke();
+                planCtx.restore();
+            }
+
+            // 2a. Long braces and shear walls of the same storey
+            for (let i = 0; i < members.length; i++) {
+                const m = members[i];
+                if ((m.type !== 'longbrace' && m.type !== 'wall') || m.failed) continue;
+                const minY = Math.min(m.n1.gy, m.n2.gy);
+                const maxY = m.type === 'wall' ? m.n3.gy : Math.max(m.n1.gy, m.n2.gy);
+                const belongsToPlan = (selectedPlanLevel === 0 && minY === 0) ||
+                                      (selectedPlanLevel > 0 && maxY === selectedPlanLevel);
+                if (!belongsToPlan) continue;
+                const p1 = toPlanXY(m.n1.gx, m.n1.gz, m.n1);
+                const p2 = toPlanXY(m.n2.gx, m.n2.gz, m.n2);
+                planCtx.save();
+                if (m.type === 'longbrace') {
+                    planCtx.strokeStyle = stressColorCSS(m.stress, '#0f766e');
+                    planCtx.lineWidth = 3.5;
+                    planCtx.setLineDash([10, 4, 2, 4]);
+                    planCtx.beginPath();
+                    planCtx.moveTo(p1.x, p1.y);
+                    planCtx.lineTo(p2.x, p2.y);
+                    planCtx.stroke();
+                } else {
+                    // Wall: concrete band (drawn thicker than true 200 mm so it reads on screen), hatched
+                    const len = Math.hypot(p2.x - p1.x, p2.y - p1.y) || 1;
+                    const ux = (p2.x - p1.x) / len, uy = (p2.y - p1.y) / len;
+                    const inset = 10, half = 5;
+                    const ax = p1.x + ux * inset, ay = p1.y + uy * inset;
+                    const bx = p2.x - ux * inset, by = p2.y - uy * inset;
+                    planCtx.fillStyle = stressColorCSS(m.stress, '#cbd5e1');
+                    planCtx.strokeStyle = '#475569';
+                    planCtx.lineWidth = 1.2;
+                    planCtx.beginPath();
+                    planCtx.moveTo(ax - uy * half, ay + ux * half);
+                    planCtx.lineTo(bx - uy * half, by + ux * half);
+                    planCtx.lineTo(bx + uy * half, by - ux * half);
+                    planCtx.lineTo(ax + uy * half, ay - ux * half);
+                    planCtx.closePath();
+                    planCtx.fill();
+                    planCtx.stroke();
+                    planCtx.clip();
+                    planCtx.strokeStyle = 'rgba(71, 85, 105, 0.55)';
+                    planCtx.lineWidth = 0.8;
+                    for (let t = 0; t < len; t += 5) {
+                        const cx = p1.x + ux * t, cy = p1.y + uy * t;
+                        planCtx.beginPath();
+                        planCtx.moveTo(cx - uy * half - ux * 4, cy + ux * half - uy * 4);
+                        planCtx.lineTo(cx + uy * half + ux * 4, cy - ux * half + uy * 4);
+                        planCtx.stroke();
+                    }
+                }
                 planCtx.restore();
             }
 
